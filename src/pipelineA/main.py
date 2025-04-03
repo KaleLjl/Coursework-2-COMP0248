@@ -13,7 +13,7 @@ from config import (
 )
 from models.classifier import get_model
 from models.utils import set_seed
-from data_processing.dataset import create_data_loaders
+from data_processing.dataset import create_data_loaders, TableDataset, collate_fn
 from training.train import train_model
 from training.evaluate import evaluate_model, analyze_results_by_sequence
 
@@ -200,7 +200,8 @@ def evaluate(args):
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=args.num_workers,
-        pin_memory=True
+        pin_memory=True,
+        collate_fn=collate_fn
     )
     
     print(f"Test samples: {len(test_dataset)}")

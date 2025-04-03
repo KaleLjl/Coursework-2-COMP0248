@@ -101,6 +101,19 @@ def depth_to_pointcloud(depth_map, fx, fy, cx, cy, min_depth=0.1, max_depth=10.0
     # Filter out invalid depth values
     valid_mask = (depth_map > min_depth) & (depth_map < max_depth)
     
+    # Check if we have any valid depth values
+    if np.sum(valid_mask) == 0:
+        # Return a small dummy point cloud instead of an empty one
+        # Create a 3x3x3 grid of points centered at origin
+        dummy_size = 3
+        x = np.linspace(-1, 1, dummy_size)
+        y = np.linspace(-1, 1, dummy_size)
+        z = np.linspace(-1, 1, dummy_size)
+        xv, yv, zv = np.meshgrid(x, y, z)
+        points = np.stack([xv.flatten(), yv.flatten(), zv.flatten()], axis=1)
+        print(f"Warning: No valid depth values in depth map. Created dummy point cloud with {points.shape[0]} points.")
+        return points
+    
     # Get valid coordinates and depths
     valid_u = u[valid_mask]
     valid_v = v[valid_mask]
@@ -195,6 +208,21 @@ def create_rgbd_pointcloud(depth_path, image_path, intrinsics_path, use_raw_dept
     
     # Filter out invalid depth values
     valid_mask = (depth_map > min_depth) & (depth_map < max_depth)
+    
+    # Check if we have any valid depth values
+    if np.sum(valid_mask) == 0:
+        # Return a small dummy point cloud instead of an empty one
+        # Create a 3x3x3 grid of points centered at origin
+        dummy_size = 3
+        x = np.linspace(-1, 1, dummy_size)
+        y = np.linspace(-1, 1, dummy_size)
+        z = np.linspace(-1, 1, dummy_size)
+        xv, yv, zv = np.meshgrid(x, y, z)
+        points = np.stack([xv.flatten(), yv.flatten(), zv.flatten()], axis=1)
+        # Create random colors for the dummy points
+        colors = np.random.random((points.shape[0], 3))
+        print(f"Warning: No valid depth values in {depth_path}. Created dummy point cloud with {points.shape[0]} points.")
+        return points, colors
     
     # Get valid coordinates and depths
     valid_u = u[valid_mask]

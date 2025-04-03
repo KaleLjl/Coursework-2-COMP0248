@@ -18,7 +18,7 @@ from models.utils import (
     load_checkpoint, compute_metrics, plot_confusion_matrix, set_seed
 )
 from data_processing.dataset import TableDataset
-from data_processing.depth_to_pointcloud import create_rgbd_pointcloud, visualize_pointcloud
+from data_processing.depth_to_pointcloud import create_rgbd_pointcloud, visualize_pointcloud, create_pointcloud_from_depth
 from data_processing.preprocessing import preprocess_point_cloud
 
 def evaluate_model(model, test_loader, criterion, device):
@@ -65,16 +65,17 @@ def evaluate_model(model, test_loader, criterion, device):
             all_scores.extend(scores.detach().cpu().numpy())
             
             # Store predictions for each sample
-            for i in range(len(metadata)):
-                depth_file = metadata[i]['depth_file']
-                predictions[depth_file] = {
-                    'pred': preds[i].item(),
-                    'score': scores[i].item(),
-                    'label': labels[i].item(),
-                    'sequence': metadata[i]['sequence'],
-                    'sub_sequence': metadata[i]['sub_sequence'],
-                    'image_file': metadata[i].get('image_file')
-                }
+            for i in range(len(preds)):
+                if i < len(metadata):  # Ensure we don't go out of bounds
+                    depth_file = metadata[i]['depth_file']
+                    predictions[depth_file] = {
+                        'pred': preds[i].item(),
+                        'score': scores[i].item(),
+                        'label': labels[i].item(),
+                        'sequence': metadata[i]['sequence'],
+                        'sub_sequence': metadata[i]['sub_sequence'],
+                        'image_file': metadata[i].get('image_file')
+                    }
     
     # Calculate metrics
     metrics = compute_metrics(

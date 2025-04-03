@@ -9,7 +9,7 @@ TRAIN_SEQUENCES = {
     "mit_32_d507": ["d507_2"],
     "mit_76_459": ["76-459b"],
     "mit_76_studyroom": ["76-1studyroom2"],
-    "mit_gym_z_squash": ["gym_sq1"],  # No tables
+    "mit_gym_z_squash": ["gym_z_squash_scan1_oct_26_2012_erika"],
     "mit_lab_hj": ["lab_hj_tea_nov_2_2012_scan1_erika"]
 }
 
