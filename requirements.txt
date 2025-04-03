@@ -1,0 +1,31 @@
+# Data Science & Machine Learning
+numpy
+scipy
+pandas
+matplotlib
+seaborn
+scikit-learn
+
+# Deep Learning
+torch
+torchvision
+
+# Computer Vision & 3D Processing
+opencv-python
+pillow
+open3d
+pyrealsense2
+
+# Pipeline-Specific
+timm
+wandb
+tensorboard
+albumentations
+transformers
+
+# Utilities
+einops
+h5py
+tqdm
+pyyaml
+argparse
