@@ -3,3 +3,4 @@ results/
 weights/ 
 environment/
 __pycache__/
+logs/
