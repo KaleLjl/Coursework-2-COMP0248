@@ -6,7 +6,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Dataset paths
 BASE_DATA_DIR = PROJECT_ROOT / "data" / "CW2-Dataset" / "data"
-``
 
 # Training sequences (MIT)
 TRAIN_SEQUENCES = {
@@ -33,7 +32,7 @@ POINT_CLOUD_PARAMS = {
     "num_points": 2048,  # Number of points to sample
     "normalize": True,   # Whether to normalize point cloud
     "sampling_method": "fps",  # fps, random, or None
-    "max_depth": 10.0,   # Maximum depth value in meters
+    "max_depth": 20.0,   # Increased from 10.0 to handle larger distances in harvard_tea_2
     "min_depth": 0.1     # Minimum depth value in meters
 }
 

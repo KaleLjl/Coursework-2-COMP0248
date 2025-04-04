@@ -43,10 +43,15 @@ def load_depth_map(depth_path, use_raw_depth=False):
     # For raw depth maps (harvard_tea_2)
     if use_raw_depth:
         if extension in ['.png', '.jpg', '.jpeg']:
-            depth_map = cv2.imread(depth_path, cv2.IMREAD_ANYDEPTH)
-            # Usually raw depth is in millimeters, convert to meters
-            depth_map = depth_map.astype(np.float32) / 1000.0
-        else:
+            depth_map_raw = cv2.imread(depth_path, cv2.IMREAD_ANYDEPTH)
+            if depth_map_raw is None:
+                 print(f"Error: Failed to read raw depth image {depth_path}")
+                 depth_map = np.zeros((480, 640), dtype=np.float32)
+            else:
+                 # Removed the debug print statement
+                 # Usually raw depth is in millimeters, convert to meters
+                 depth_map = depth_map_raw.astype(np.float32) / 1000.0
+        else: # Corrected indentation level
             # Try to load as numpy array
             try:
                 depth_map = np.load(depth_path)
@@ -77,7 +82,7 @@ def load_depth_map(depth_path, use_raw_depth=False):
     
     return depth_map
 
-def depth_to_pointcloud(depth_map, fx, fy, cx, cy, min_depth=0.1, max_depth=10.0):
+def depth_to_pointcloud(depth_map, fx, fy, cx, cy, min_depth=0.1, max_depth=10.0, depth_path=None):
     """Convert depth map to point cloud.
     
     Args:
@@ -111,7 +116,12 @@ def depth_to_pointcloud(depth_map, fx, fy, cx, cy, min_depth=0.1, max_depth=10.0
         z = np.linspace(-1, 1, dummy_size)
         xv, yv, zv = np.meshgrid(x, y, z)
         points = np.stack([xv.flatten(), yv.flatten(), zv.flatten()], axis=1)
-        print(f"Warning: No valid depth values in depth map. Created dummy point cloud with {points.shape[0]} points.")
+        warning_msg = f"Warning: No valid depth values in depth map"
+        if depth_path:
+            # Print the full path instead of just the basename
+            warning_msg += f" ({str(depth_path)})" 
+        warning_msg += f". Created dummy point cloud with {points.shape[0]} points."
+        print(warning_msg)
         return points
     
     # Get valid coordinates and depths
@@ -149,8 +159,8 @@ def create_pointcloud_from_depth(depth_path, intrinsics_path, use_raw_depth=Fals
     # Load depth map
     depth_map = load_depth_map(depth_path, use_raw_depth)
     
-    # Convert to point cloud
-    points = depth_to_pointcloud(depth_map, fx, fy, cx, cy, min_depth, max_depth)
+    # Convert to point cloud, passing the path for logging
+    points = depth_to_pointcloud(depth_map, fx, fy, cx, cy, min_depth, max_depth, depth_path=depth_path)
     
     return points
 
@@ -221,7 +231,8 @@ def create_rgbd_pointcloud(depth_path, image_path, intrinsics_path, use_raw_dept
         points = np.stack([xv.flatten(), yv.flatten(), zv.flatten()], axis=1)
         # Create random colors for the dummy points
         colors = np.random.random((points.shape[0], 3))
-        print(f"Warning: No valid depth values in {depth_path}. Created dummy point cloud with {points.shape[0]} points.")
+        # Include full path in the warning
+        print(f"Warning: No valid depth values in depth map ({str(depth_path)}). Created dummy point cloud with {points.shape[0]} points.")
         return points, colors
     
     # Get valid coordinates and depths

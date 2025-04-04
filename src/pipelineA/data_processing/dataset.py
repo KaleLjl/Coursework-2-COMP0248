@@ -217,27 +217,29 @@ def collate_fn(batch):
         'metadata': metadata
     }
 
-def create_data_loaders(data_root, train_sequences, test_sequences, 
+def create_data_loaders(data_root, train_sequences, val_sequences, test_sequences=None, 
                         batch_size=16, num_workers=4, point_cloud_params=None,
-                        augmentation_params=None, train_val_split=0.8):
-    """Create data loaders for training, validation, and testing.
+                        augmentation_params=None):
+    """Create data loaders for training, validation, and optionally testing.
+    
+    Uses separate sequence dictionaries for train and validation sets.
     
     Args:
         data_root (str): Root directory of the dataset
-        train_sequences (dict): Dictionary of training sequences
-        test_sequences (dict): Dictionary of test sequences
+        train_sequences (dict): Dictionary of training sequences (e.g., MIT)
+        val_sequences (dict): Dictionary of validation sequences (e.g., Harvard)
+        test_sequences (dict, optional): Dictionary of test sequences. Defaults to None.
         batch_size (int): Batch size
         num_workers (int): Number of workers for data loading
         point_cloud_params (dict, optional): Parameters for point cloud processing
         augmentation_params (dict, optional): Parameters for data augmentation
-        train_val_split (float): Fraction of training data to use for training
         
     Returns:
-        tuple: (train_loader, val_loader, test_loader)
+        tuple: (train_loader, val_loader, test_loader or None)
     """
-    from torch.utils.data import DataLoader, random_split
+    from torch.utils.data import DataLoader
     
-    # Create the training dataset
+    # Create the training dataset (using train_sequences, augment=True)
     train_dataset = TableDataset(
         data_root=data_root,
         sequences=train_sequences,
@@ -247,29 +249,27 @@ def create_data_loaders(data_root, train_sequences, test_sequences,
         augmentation_params=augmentation_params
     )
     
-    # Split into training and validation
-    train_size = int(train_val_split * len(train_dataset))
-    val_size = len(train_dataset) - train_size
-    
-    train_dataset, val_dataset = random_split(
-        train_dataset, 
-        [train_size, val_size],
-        generator=torch.Generator().manual_seed(42)  # For reproducibility
-    )
-    
-    # Override the augment and mode for validation dataset
-    val_dataset.dataset.augment = False
-    val_dataset.dataset.mode = 'val'
-    
-    # Create the test dataset
-    test_dataset = TableDataset(
+    # Create the validation dataset (using val_sequences, augment=False)
+    val_dataset = TableDataset(
         data_root=data_root,
-        sequences=test_sequences,
+        sequences=val_sequences,
         augment=False,
-        mode='test',
+        mode='val',
         point_cloud_params=point_cloud_params,
-        augmentation_params=None  # No augmentation for test
+        augmentation_params=None # No augmentation for validation
     )
+    
+    # Create the test dataset if test_sequences are provided
+    test_dataset = None
+    if test_sequences:
+        test_dataset = TableDataset(
+            data_root=data_root,
+            sequences=test_sequences,
+            augment=False,
+            mode='test',
+            point_cloud_params=point_cloud_params,
+            augmentation_params=None  # No augmentation for test
+        )
     
     # Create data loaders with custom collate function
     train_loader = DataLoader(
@@ -284,19 +284,21 @@ def create_data_loaders(data_root, train_sequences, test_sequences,
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
-        shuffle=False,
+        shuffle=False, # No shuffling for validation
         num_workers=num_workers,
         pin_memory=True,
         collate_fn=collate_fn
     )
     
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True,
-        collate_fn=collate_fn
-    )
+    test_loader = None
+    if test_dataset:
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=batch_size,
+            shuffle=False, # No shuffling for test
+            num_workers=num_workers,
+            pin_memory=True,
+            collate_fn=collate_fn
+        )
     
     return train_loader, val_loader, test_loader

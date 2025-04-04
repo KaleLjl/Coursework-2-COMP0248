@@ -254,9 +254,66 @@ def scale_point_cloud(points, scale):
     """
     return points * scale
 
+def point_dropout(points, colors=None, dropout_ratio=0.1):
+    """Randomly drop points from the point cloud.
+    
+    Args:
+        points (numpy.ndarray): Input point cloud (Nx3)
+        colors (numpy.ndarray, optional): Input colors (Nx3)
+        dropout_ratio (float): Ratio of points to drop (0.0 to 1.0)
+        
+    Returns:
+        tuple: (dropped_points, dropped_colors)
+    """
+    if dropout_ratio <= 0.0:
+        return points, colors
+        
+    num_points = points.shape[0]
+    num_keep = int(num_points * (1.0 - dropout_ratio))
+    
+    if num_keep <= 0: # Avoid dropping all points
+        print(f"Warning: Point dropout ratio {dropout_ratio} too high, keeping 1 point.")
+        num_keep = 1
+        
+    keep_indices = np.random.choice(num_points, num_keep, replace=False)
+    
+    dropped_points = points[keep_indices]
+    dropped_colors = colors[keep_indices] if colors is not None else None
+    
+    return dropped_points, dropped_colors
+
+def random_subsample(points, colors=None, subsample_ratio=0.8):
+    """Randomly subsample points from the point cloud.
+    
+    Args:
+        points (numpy.ndarray): Input point cloud (Nx3)
+        colors (numpy.ndarray, optional): Input colors (Nx3)
+        subsample_ratio (float): Ratio of points to keep (0.0 to 1.0)
+        
+    Returns:
+        tuple: (subsampled_points, subsampled_colors)
+    """
+    if subsample_ratio >= 1.0:
+        return points, colors
+        
+    num_points = points.shape[0]
+    num_keep = int(num_points * subsample_ratio)
+    
+    if num_keep <= 0: # Avoid keeping zero points
+        print(f"Warning: Subsample ratio {subsample_ratio} too low, keeping 1 point.")
+        num_keep = 1
+        
+    keep_indices = np.random.choice(num_points, num_keep, replace=False)
+    
+    subsampled_points = points[keep_indices]
+    subsampled_colors = colors[keep_indices] if colors is not None else None
+    
+    return subsampled_points, subsampled_colors
+
 def augment_point_cloud(points, colors=None, rotation_y_range=None, 
                         rotation_z=False, jitter_sigma=None, jitter_clip=None,
-                        scale_range=None):
+                        scale_range=None, point_dropout_ratio=None,
+                        random_subsample_flag=False, subsample_range=None):
     """Apply data augmentation to point cloud.
     
     Args:
@@ -293,6 +350,15 @@ def augment_point_cloud(points, colors=None, rotation_y_range=None,
     if scale_range is not None:
         scale = np.random.uniform(scale_range[0], scale_range[1])
         augmented_points = scale_point_cloud(augmented_points, scale)
+        
+    # Apply random subsampling
+    if random_subsample_flag and subsample_range is not None:
+        subsample_ratio = np.random.uniform(subsample_range[0], subsample_range[1])
+        augmented_points, colors = random_subsample(augmented_points, colors, subsample_ratio)
+        
+    # Apply point dropout
+    if point_dropout_ratio is not None and point_dropout_ratio > 0:
+        augmented_points, colors = point_dropout(augmented_points, colors, point_dropout_ratio)
     
     return augmented_points, colors
 
@@ -326,10 +392,13 @@ def preprocess_point_cloud(points, colors=None, normalize=True, num_points=2048,
             rotation_z=augmentation_params.get('rotation_z', False),
             jitter_sigma=augmentation_params.get('jitter_sigma'),
             jitter_clip=augmentation_params.get('jitter_clip'),
-            scale_range=augmentation_params.get('scale_range')
+            scale_range=augmentation_params.get('scale_range'),
+            point_dropout_ratio=augmentation_params.get('point_dropout_ratio'),
+            random_subsample_flag=augmentation_params.get('random_subsample', False),
+            subsample_range=augmentation_params.get('subsample_range')
         )
     
-    # Sample points
+    # Sample points (ensure final count is num_points AFTER augmentation)
     if sampling_method is not None:
         points, colors = sample_points(points, colors, num_points, sampling_method)
     

@@ -29,43 +29,36 @@ The project is in its early stages with focus primarily on Pipeline A implementa
 - ✅ TensorBoard integration for tracking metrics
 - ✅ Metric computation and visualization
 
+### What Works (Continued)
+- ✅ **New Dataset Split Strategy**: Implemented MIT sequences for training, Harvard sequences for validation (`dataset.py`, `train.py`).
+- ✅ **Enhanced Regularization**: Implemented feature-level dropout in DGCNN (`classifier.py`), gradient clipping (`train.py`), and confirmed config parameters (`config.py`).
+- ✅ **Advanced Data Augmentation**: Implemented point dropout and random subsampling (`preprocessing.py`) and confirmed config parameters (`config.py`).
+- ✅ **Training Script Updates**: Aligned `train.py` with new dataset split, regularization, augmentation, and configuration loading.
+- ✅ **Label Format Handling**: Confirmed existing logic in `dataset.py` handles `harvard_tea_2` format.
+- ✅ **Depth Warning Resolution**: Identified cause of "No valid depth values" warning (low `max_depth` for `harvard_tea_2`) and fixed by increasing `max_depth` in `config.py`. Corrected related `IndentationError`.
+
 ### In Progress
 
-- 🔄 Major dataset split restructuring
-  - ✅ Decided to use MIT sequences for training, Harvard sequences for validation
-  - 🔄 Implementing the new dataset loading logic
-  - 🔄 Adapting training parameters to ensure generalization to Harvard validation set
-- 🔄 Addressing model overfitting issues
-  - ✅ Identified root causes: model capacity vs. dataset size and train/val split methodology
-  - ✅ Updated configuration parameters with stronger regularization and augmentation
-  - 🔄 Implementing feature-level dropout and advanced regularization
-- 🔄 Data augmentation enhancement for point clouds
-  - ✅ Increased rotation range, jitter, and scale variation
-  - 🔄 Implementing point dropout and random subsampling
-- 🔄 Balancing model complexity with dataset size
-  - 🔄 Testing reduced embedding dimensions
-  - 🔄 Comparing DGCNN and PointNet generalization
-- 🔄 Hyperparameter optimization
+- 🔄 **Testing & Validation**: Ready to run training experiments with the corrected configuration and code.
+- 🔄 **Hyperparameter Optimization**: Tuning learning rate, batch size, etc., based on upcoming results.
+- 🔄 **Model Complexity Balancing**: Planning experiments to test reduced embedding dimensions (e.g., 512).
+- 🔄 **Architecture Comparison**: Planning experiments to compare DGCNN vs. PointNet generalization.
 
 ### Not Started
 
-- ❌ Thorough evaluation on new validation set (Harvard sequences)
-- ❌ Performance analysis and comparison with baseline
-- ❌ Integration of optimal model into final pipeline
+- ❌ Running training experiments with the corrected code.
+- ❌ Thorough evaluation and analysis of results from the new configuration.
+- ❌ Performance comparison with baseline/previous attempts.
+- ❌ Integration of optimal model into final pipeline.
+- ❌ Implementation of further enhancements (e.g., mixup, detailed divergence monitoring).
 
 ### Known Issues
 
-- 🐞 **Current Focus**: Previously, training metrics (accuracy, F1-score) increased while validation metrics stagnated
-  - 🔍 Root cause identified: Model capacity too high for dataset size + non-optimal validation split
-  - 🛠️ Solution in progress: Enhanced regularization and complete restructuring of dataset split
-- 🐞 New dataset configuration needs to ensure model generalizes well from MIT training to Harvard validation sequences
-- 🐞 **Label Format Inconsistency**: The harvard_tea_2 dataset only has the "depth" label format while other datasets have the "depthTSDF" label format
-  - 🛠️ Requires special handling in the data loading pipeline
-  - 🛠️ May affect validation results if not properly processed
-- 🐞 Handling of invalid depth values needs improvement
-- 🐞 Point cloud sampling strategy may need optimization
-- 🐞 Need to address missing table labels in some frames
-- 🐞 Potential class imbalance in new training/validation configuration
+- 🐞 **Generalization Performance**: Need to verify if the implemented changes successfully improve generalization from MIT to Harvard sequences (primary focus of next training runs).
+- 🐞 Handling of invalid depth values needs improvement (lower priority).
+- 🐞 Point cloud sampling strategy may need optimization (lower priority).
+- 🐞 Need to address missing table labels in some frames (lower priority).
+- 🐞 Potential class imbalance in new training/validation configuration (monitor during evaluation).
 
 ## Pipeline B: RGB to Depth to Classification
 
@@ -170,8 +163,8 @@ Current implementation:
 
 | Milestone | Target Date | Status |
 |-----------|-------------|--------|
-| Pipeline A implementation | TBD | 65% Complete |
-| Address overfitting in Pipeline A | TBD | In Progress (~40% Complete) |
+| Pipeline A implementation | TBD | 75% Complete |
+| Address overfitting in Pipeline A | TBD | Implementation & Debugging Complete, Testing Pending |
 | Pipeline B implementation | TBD | Not Started |
 | Pipeline C implementation | TBD | Not Started |
 | RealSense data collection | TBD | Not Started |

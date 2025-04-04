@@ -107,16 +107,18 @@ class EdgeConv(nn.Module):
 class DGCNN(nn.Module):
     """Dynamic Graph CNN for point cloud classification."""
     
-    def __init__(self, num_classes=2, k=20, emb_dims=1024, dropout=0.5):
+    def __init__(self, num_classes=2, k=20, emb_dims=1024, dropout=0.5, feature_dropout=0.0):
         """Initialize DGCNN model.
         
         Args:
             num_classes (int): Number of output classes
             k (int): Number of neighbors
             emb_dims (int): Embedding dimensions
-            dropout (float): Dropout rate
+            dropout (float): Dropout rate for final classifier MLP
+            feature_dropout (float): Dropout rate after EdgeConv layers
         """
         super(DGCNN, self).__init__()
+        self.feature_dropout_rate = feature_dropout # Store feature dropout rate
         
         # Edge convolution layers
         self.edge_conv1 = EdgeConv(3, 64, k=k)
@@ -163,14 +165,25 @@ class DGCNN(nn.Module):
         # Transpose to (B, 3, N)
         x = x.transpose(2, 1)
         
-        # Apply edge convolutions
+        # Apply edge convolutions with optional feature dropout
         x1 = self.edge_conv1(x)
+        if self.feature_dropout_rate > 0 and self.training:
+             x1 = F.dropout(x1, p=self.feature_dropout_rate)
+             
         x2 = self.edge_conv2(x1)
+        if self.feature_dropout_rate > 0 and self.training:
+             x2 = F.dropout(x2, p=self.feature_dropout_rate)
+             
         x3 = self.edge_conv3(x2)
+        if self.feature_dropout_rate > 0 and self.training:
+             x3 = F.dropout(x3, p=self.feature_dropout_rate)
+             
         x4 = self.edge_conv4(x3)
+        if self.feature_dropout_rate > 0 and self.training:
+             x4 = F.dropout(x4, p=self.feature_dropout_rate)
         
         # Concatenate features
-        x = torch.cat([x1, x2, x3, x4], dim=1)
+        x = torch.cat([x1, x2, x3, x4], dim=1) # Shape: (B, 64+64+128+256=512, N)
         
         # MLP to get global features
         x = self.mlp(x)
@@ -290,13 +303,14 @@ def get_model(model_type='dgcnn', num_classes=2, **kwargs):
             num_classes=num_classes,
             k=kwargs.get('k', 20),
             emb_dims=kwargs.get('emb_dims', 1024),
-            dropout=kwargs.get('dropout', 0.5)
+            dropout=kwargs.get('dropout', 0.5),
+            feature_dropout=kwargs.get('feature_dropout', 0.0) # Add feature_dropout
         )
     elif model_type == 'pointnet':
+        # PointNet doesn't have feature dropout in this implementation
         return PointNet(
             num_classes=num_classes,
             dropout=kwargs.get('dropout', 0.5)
         )
     else:
         raise ValueError(f"Unknown model type: {model_type}")
-

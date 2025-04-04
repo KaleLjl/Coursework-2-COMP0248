@@ -12,7 +12,7 @@ import argparse
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import (
-    BASE_DATA_DIR, TRAIN_SEQUENCES, TEST1_SEQUENCES, 
+    BASE_DATA_DIR, TRAIN_SEQUENCES, TEST1_SEQUENCES, # TEST1_SEQUENCES are now VAL_SEQUENCES
     POINT_CLOUD_PARAMS, MODEL_PARAMS, TRAIN_PARAMS, AUGMENTATION_PARAMS,
     WEIGHTS_DIR, RESULTS_DIR, LOGS_DIR
 )
@@ -54,6 +54,11 @@ def train_epoch(model, train_loader, criterion, optimizer, device):
         outputs = model(points)
         loss = criterion(outputs, labels)
         loss.backward()
+        
+        # Gradient Clipping
+        if TRAIN_PARAMS.get('gradient_clip', 0) > 0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), TRAIN_PARAMS['gradient_clip'])
+            
         optimizer.step()
         
         # Track loss
@@ -248,26 +253,31 @@ def main(args):
     # Create data loaders
     train_loader, val_loader, test_loader = create_data_loaders(
         data_root=BASE_DATA_DIR,
-        train_sequences=TRAIN_SEQUENCES,
-        test_sequences=TEST1_SEQUENCES,
+        train_sequences=TRAIN_SEQUENCES, # Use MIT sequences for training
+        val_sequences=TEST1_SEQUENCES,   # Use Harvard sequences for validation
+        test_sequences=None,             # No test set defined for now
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         point_cloud_params=POINT_CLOUD_PARAMS,
-        augmentation_params=AUGMENTATION_PARAMS if args.augment else None,
-        train_val_split=args.train_val_split
+        augmentation_params=AUGMENTATION_PARAMS if args.augment else None
+        # train_val_split is removed as we now use separate sequence dicts
     )
     
     print(f"Train samples: {len(train_loader.dataset)}")
     print(f"Validation samples: {len(val_loader.dataset)}")
-    print(f"Test samples: {len(test_loader.dataset)}")
-    
-    # Create model
+    if test_loader:
+        print(f"Test samples: {len(test_loader.dataset)}")
+    else:
+        print("Test samples: 0 (No test set specified)")
+
+    # Create model using parameters from config
     model = get_model(
-        model_type=args.model_type,
+        model_type=args.model_type, # Keep model_type configurable via CLI
         num_classes=2,
-        k=args.k,
-        emb_dims=args.emb_dims,
-        dropout=args.dropout
+        k=args.k,                   # Keep k configurable via CLI
+        emb_dims=MODEL_PARAMS['emb_dims'],
+        dropout=MODEL_PARAMS['dropout'],
+        feature_dropout=MODEL_PARAMS.get('feature_dropout', 0.0) # Use get for backward compatibility
     )
     
     # Print model info
@@ -284,16 +294,16 @@ def main(args):
     # Define optimizer
     optimizer = optim.Adam(
         model.parameters(),
-        lr=args.learning_rate,
-        weight_decay=args.weight_decay
+        lr=args.learning_rate, # Keep LR configurable via CLI
+        weight_decay=TRAIN_PARAMS['weight_decay'] # Use weight_decay from config
     )
     
-    # Define learning rate scheduler
+    # Define learning rate scheduler using parameters from config
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
-        mode='min',
-        factor=args.lr_scheduler_factor,
-        patience=args.lr_scheduler_patience,
+        mode='min', # Monitor validation loss
+        factor=TRAIN_PARAMS['lr_scheduler_factor'],
+        patience=TRAIN_PARAMS['lr_scheduler_patience'],
         verbose=True
     )
     
@@ -349,28 +359,18 @@ if __name__ == "__main__":
     parser.add_argument("--model_type", type=str, default="dgcnn",
                         choices=["dgcnn", "pointnet"],
                         help="Model type")
-    parser.add_argument("--k", type=int, default=20,
+    parser.add_argument("--k", type=int, default=MODEL_PARAMS.get('k', 20), # Default from config
                         help="Number of nearest neighbors for DGCNN")
-    parser.add_argument("--emb_dims", type=int, default=1024,
-                        help="Embedding dimensions")
-    parser.add_argument("--dropout", type=float, default=0.5,
-                        help="Dropout rate")
+    # Removed emb_dims and dropout as they are now loaded from config.py
     
     # Training parameters
-    parser.add_argument("--num_epochs", type=int, default=100,
+    parser.add_argument("--num_epochs", type=int, default=TRAIN_PARAMS.get('num_epochs', 100), # Default from config
                         help="Number of epochs")
-    parser.add_argument("--batch_size", type=int, default=16,
+    parser.add_argument("--batch_size", type=int, default=TRAIN_PARAMS.get('batch_size', 16), # Default from config
                         help="Batch size")
-    parser.add_argument("--learning_rate", type=float, default=0.001,
+    parser.add_argument("--learning_rate", type=float, default=TRAIN_PARAMS.get('learning_rate', 0.001), # Default from config
                         help="Learning rate")
-    parser.add_argument("--weight_decay", type=float, default=1e-4,
-                        help="Weight decay")
-    parser.add_argument("--lr_scheduler_patience", type=int, default=5,
-                        help="Learning rate scheduler patience")
-    parser.add_argument("--lr_scheduler_factor", type=float, default=0.5,
-                        help="Learning rate scheduler factor")
-    parser.add_argument("--train_val_split", type=float, default=0.8,
-                        help="Train/validation split ratio")
+    # Removed weight_decay, lr_scheduler_patience, lr_scheduler_factor, train_val_split
     
     # Data parameters
     parser.add_argument("--augment", action="store_true",

@@ -12,61 +12,51 @@ The project is currently focused on the following areas:
 
 ## Recent Changes
 
-Recent work has focused on analyzing and addressing the overfitting issue:
+Recent work has focused on implementing the strategy to address overfitting:
 
-1. **Major Dataset Split Restructuring**: Changed the dataset usage:
-   - MIT sequences (~290 RGBD frames) will be used for training
-   - Harvard sequences (~98 RGBD frames) will be used for validation
-   - Test dataset will remain empty for now
-   
-2. **Configuration Updates**: Enhanced regularization and data augmentation parameters in `config.py`:
-   - Increased dropout rate from 0.5 to 0.7
-   - Added feature-level dropout (0.2)
-   - Increased weight decay from 1e-4 to 5e-4
-   - Added gradient clipping
-   - Enhanced data augmentation with more aggressive rotations, jitter, and point dropout
+1.  **Label Format Handling Confirmed**: Reviewed `dataset.py` and confirmed existing logic correctly handles the "depth" vs "depthTSDF" format difference for `harvard_tea_2`. No code changes were needed for this specific item.
 
-3. **Dataset Split Understanding**: Previous approach used train and validation data from the same MIT sequences split randomly at the frame level, while test data came from Harvard sequences. This new approach should provide a much stronger signal about generalization performance.
+2.  **New Dataset Split Strategy Implemented**:
+    *   Modified `dataset.py`: Updated `create_data_loaders` to accept separate `train_sequences` and `val_sequences` arguments, removing the old `train_val_split` logic.
+    *   Modified `train.py`: Updated the call to `create_data_loaders` to pass `TRAIN_SEQUENCES` (MIT) as training data and `TEST1_SEQUENCES` (Harvard) as validation data.
 
-4. **Label Format Differences**: Identified that the harvard_tea_2 dataset only has the "depth" label format, while other datasets have the "depthTSDF" label format. This requires special handling in the data loading pipeline to ensure consistent processing across all validation sequences.
+3.  **Enhanced Model Regularization Implemented**:
+    *   Modified `classifier.py`: Added `feature_dropout` parameter to `DGCNN` constructor and applied dropout after EdgeConv layers during training. Updated `get_model` to accept this parameter.
+    *   Confirmed `config.py`: Verified that `MODEL_PARAMS` already contained `emb_dims` and `feature_dropout` parameters.
+
+4.  **Advanced Data Augmentation Implemented**:
+    *   Modified `preprocessing.py`: Added `point_dropout` and `random_subsample` functions. Integrated these into the `augment_point_cloud` function and updated the call within `preprocess_point_cloud`.
+
+5.  **Training Process Enhancements Implemented**:
+    *   Modified `train.py`:
+        *   Updated model instantiation to use regularization parameters (`emb_dims`, `dropout`, `feature_dropout`) from `config.py`.
+        *   Updated optimizer and scheduler instantiation to use parameters (`weight_decay`, `lr_scheduler_factor`, `lr_scheduler_patience`) from `config.py`.
+        *   Implemented gradient clipping in `train_epoch` using `TRAIN_PARAMS['gradient_clip']`.
+        *   Simplified command-line arguments, removing those now sourced from `config.py`.
+6.  **Depth Warning Debugging**:
+    *   Identified "No valid depth values" warnings during training, specifically for `harvard_tea_2` sequence.
+    *   Enhanced logging in `depth_to_pointcloud.py` to print full paths and raw depth statistics.
+    *   Confirmed the issue was caused by the `max_depth` threshold (10.0m) being too low for the millimeter-based raw depth values in `harvard_tea_2` after conversion to meters.
+    *   Fixed by increasing `POINT_CLOUD_PARAMS['max_depth']` to `20.0` in `config.py`.
+    *   Corrected an `IndentationError` introduced during debugging in `depth_to_pointcloud.py`.
 
 ## Next Steps
 
-The immediate next steps are:
+With the core code changes for the overfitting mitigation strategy complete and the depth warning issue resolved, the immediate next steps are:
 
-1. **Address Label Format Inconsistency**:
-   - Implement special handling for harvard_tea_2 dataset which uses "depth" label format
-   - Ensure consistent data processing between different label formats
-   - Add format detection and conversion logic in the data loading pipeline
+1.  **Testing and Validation**:
+    *   Re-run the updated training script (`train.py`) with the corrected configuration (MIT train, Harvard val, `max_depth=20.0`, enhanced regularization/augmentation).
+    *   Monitor training progress using TensorBoard, paying close attention to the validation metrics (especially F1-score) on the Harvard set and the train/validation divergence. Ensure the depth warnings are gone.
+    *   Evaluate the performance of the best model checkpoint on the Harvard validation set.
+    *   Compare generalization performance (e.g., DGCNN vs. PointNet, different `emb_dims`).
+    *   Create visualizations to understand model behavior.
 
-2. **Implement New Dataset Split Strategy**:
-   - Update the dataset loading code to use MIT sequences for training
-   - Configure Harvard sequences as the validation set
-   - Leave test dataset empty for now
-   - Update data processing pipelines to handle this new configuration
+2.  **Further Training Enhancements (Optional/Iterative)**:
+    *   Based on initial results, consider implementing mixup augmentation (`mixup_alpha` parameter exists in `config.py` but is not yet used in `train.py`).
+    *   Implement more detailed monitoring of train/validation divergence.
+    *   Experiment with reduced model complexity (e.g., `emb_dims=512` via `config.py`).
 
-2. **Implement Enhanced Model Regularization**:
-   - Modify DGCNN model to support feature-level dropout
-   - Test reduced model complexity by decreasing embedding dimensions (1024 → 512)
-   - Add spectral normalization to convolutional layers
-   - Adjust regularization parameters appropriately
-
-3. **Enhance Training Process**:
-   - Implement mixup augmentation for point clouds
-   - Add monitoring of train/validation divergence with early warnings
-   - Test gradient accumulation for more stable optimization
-   - Focus on generalization to the Harvard validation set
-
-5. **Advanced Data Augmentation**:
-   - Add point dropout implementation to simulate occlusion
-   - Implement partial point cloud rotation to create more viewpoint variety
-   - Test random subsampling during training
-
-6. **Testing and Validation**:
-   - Evaluate model performance on Harvard validation sequences
-   - Compare generalization of DGCNN vs. PointNet architectures
-   - Create visualizations to understand what features the model is learning
-   - Ensure harvard_tea_2 sequence is properly evaluated despite label format differences
+3.  **Memory Bank Update**: Update `progress.md` after initial training runs.
 
 ## Active Decisions and Considerations
 

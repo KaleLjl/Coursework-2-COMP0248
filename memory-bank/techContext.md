@@ -38,7 +38,7 @@ Matplotlib
 
 ### Point Cloud Generation
 
-The depth-to-point-cloud conversion utilizes camera intrinsic parameters to project depth pixels into 3D space:
+The depth-to-point-cloud conversion utilizes camera intrinsic parameters to project depth pixels into 3D space. It filters depth values based on `min_depth` and `max_depth` defined in `config.py`. Note: `max_depth` was increased from 10.0m to 20.0m to accommodate larger distances observed in the `harvard_tea_2` sequence.
 
 ```python
 # Pseudo-code for depth to point cloud conversion
