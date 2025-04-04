@@ -45,6 +45,7 @@ graph TD
    - `depth_to_pointcloud.py`: Converts depth maps to 3D point clouds
    - `dataset.py`: Handles data loading and preprocessing
    - `preprocessing.py`: Contains point cloud preprocessing functions
+   - Data split is now restructured: MIT sequences for training, Harvard sequences for validation
 
 2. **Models**:
    - `classifier.py`: Implements neural network architectures for point cloud classification
@@ -52,22 +53,37 @@ graph TD
 
 3. **Training**:
    - `train.py`: Handles model training and validation
-   - `evaluate.py`: Evaluates model performance on test data
+   - `evaluate.py`: Evaluates model performance on validation data
+   - Training now uses MIT sequences with strong regularization
 
 4. **Configuration**:
    - `config.py`: Centralizes configuration parameters
+   - Contains dataset split configuration and regularization parameters
 
 ### Data Flow
 
 ```mermaid
 graph LR
-    D[Depth Map] --> P[Preprocessing]
-    P --> PC[Point Cloud Generation]
-    PC --> S[Sampling/Normalization]
-    S --> A[Augmentation]
-    A --> M[Model Input]
-    M --> C[Classification]
-    C --> O[Output: Table/No Table]
+    subgraph "Training Pipeline"
+    DM[MIT Depth Maps] --> PM[Preprocessing]
+    PM --> PCM[Point Cloud Generation]
+    PCM --> SM[Sampling/Normalization]
+    SM --> AM[Augmentation]
+    AM --> MM[Model Input]
+    MM --> T[Training]
+    end
+    
+    subgraph "Validation Pipeline"
+    DH[Harvard Depth Maps] --> PH[Preprocessing]
+    PH --> PCH[Point Cloud Generation]
+    PCH --> SH[Sampling/Normalization]
+    SH --> AH[Augmentation]
+    AH --> MH[Model Input]
+    MH --> V[Validation]
+    end
+    
+    T --> M[Trained Model]
+    V --> E[Evaluation Metrics]
 ```
 
 ### Key Interfaces
@@ -80,6 +96,9 @@ graph LR
        def __getitem__(self, idx)
        def __len__()
    ```
+   
+   The split parameter now determines whether to load MIT data (for training) 
+   or Harvard data (for validation).
 
 2. **Model Interface**:
    ```python
@@ -88,13 +107,18 @@ graph LR
        def __init__(self, args)
        def forward(self, x)
    ```
+   
+   The model now includes enhanced regularization techniques to ensure generalization to the Harvard validation set.
 
 3. **Training Interface**:
    ```python
    # Training interface
    def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, args)
-   def evaluate(model, test_loader, criterion, args)
+   def evaluate(model, validation_loader, criterion, args)
    ```
+   
+   The training process now uses MIT sequences for training and Harvard sequences for validation,
+   with regularization parameters tuned for better generalization to the validation set.
 
 ## Pipeline B: RGB to Depth to Classification
 
@@ -144,3 +168,8 @@ graph LR
 3. **Error Handling**: Robust handling of invalid depths, empty point clouds
 4. **Performance Monitoring**: Tracking of inference time, memory usage
 5. **Evaluation Framework**: Consistent metrics across pipelines for fair comparison
+6. **Dataset Split Management**: 
+   - MIT sequences used for training (larger dataset, ~290 frames)
+   - Harvard sequences used for validation (smaller dataset, ~98 frames)
+   - Strong regularization to ensure generalization to validation set
+   - Monitoring of generalization performance across datasets

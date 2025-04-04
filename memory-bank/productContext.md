@@ -52,7 +52,11 @@ From a user perspective, the ideal solution should:
 
 The project operates within these constraints:
 
-1. **Limited Dataset Size**: Working with 290 training frames and <150 test frames
+1. **Limited Dataset Size**: 
+   - Original assignment: 290 MIT frames for training, 98 Harvard frames for testing
+   - Current implementation: 290 MIT frames for training, 98 Harvard frames for validation (to address generalization issues)
+   - Using the larger dataset for training while testing generalization on a different dataset distribution
 2. **Academic Context**: Focusing on methodology and evaluation rather than production-ready implementation
 3. **Specific Table Definition**: Only certain furniture types (table top, dining table, desk, coffee table) are considered tables
 4. **Fixed Evaluation Framework**: Must adhere to the coursework evaluation metrics and reporting format
+5. **Generalization Challenge**: Models need to generalize across different environments (MIT vs Harvard sequences) which have different characteristics

@@ -97,41 +97,68 @@ The data is organized into sequences from different locations:
 
 ```
 data/
-├── MIT/ (Training)
+├── MIT/ (Training - 290 frames)
 │   ├── mit_32_d507/
 │   ├── mit_76_459/
 │   ├── mit_76_studyroom/
 │   ├── mit_gym_z_squash/
 │   └── mit_lab_hj/
-├── Harvard/ (Test 1)
+├── Harvard/ (Validation - 98 frames)
 │   ├── harvard_c5/
 │   ├── harvard_c6/
 │   ├── harvard_c11/
 │   └── harvard_tea_2/
-└── RealSense/ (Test 2)
+└── RealSense/ (Future Test Data)
     └── [custom captured data]
 ```
+
+Note: This represents the current implementation which uses MIT sequences (larger dataset) for training and Harvard sequences (smaller dataset) for validation to better measure generalization performance.
 
 Each sequence contains:
 - Depth maps (.png or .npy)
 - RGB images (.jpg or .png)
 - Polygon annotations (format varies)
 
+**Important Label Format Difference**:
+- The harvard_tea_2 dataset only has the "depth" label format
+- Other datasets have the "depthTSDF" label format
+- This requires special handling in the data loading pipeline to ensure consistent processing
+
 ### Data Loading Pipeline
 
 ```mermaid
 graph TD
     A[Sequence Directory] --> B[Dataset Class]
-    B --> C{Data Type?}
-    C -->|Depth| D[Load Depth Map]
-    C -->|RGB| E[Load RGB Image]
-    C -->|Labels| F[Load Annotations]
-    D --> G[Convert to Point Cloud]
-    E --> H[Process RGB]
-    F --> I[Generate Ground Truth]
-    G --> J[Point Cloud Dataset]
-    H --> K[RGB Dataset]
-    I --> L[Label Dataset]
+    B --> C{Split Type?}
+    
+    C -->|Training| D[MIT Sequences]
+    C -->|Validation| E[Harvard Sequences]
+    
+    D --> F{Data Type?}
+    F -->|Depth| G[Load Depth Map]
+    F -->|RGB| H[Load RGB Image]
+    F -->|Labels| I[Load Annotations]
+    
+    E --> J{Data Type?}
+    J -->|Depth| K[Load Depth Map]
+    J -->|RGB| L[Load RGB Image]
+    J -->|Labels| M[Load Annotations]
+    
+    G --> N[Convert to Point Cloud]
+    H --> O[Process RGB]
+    I --> P[Generate Ground Truth]
+    
+    K --> Q[Convert to Point Cloud]
+    L --> R[Process RGB]
+    M --> S[Generate Ground Truth]
+    
+    N --> T[Training Point Cloud Dataset]
+    O --> U[Training RGB Dataset]
+    P --> V[Training Label Dataset]
+    
+    Q --> W[Validation Point Cloud Dataset]
+    R --> X[Validation RGB Dataset]
+    S --> Y[Validation Label Dataset]
 ```
 
 ## Configuration System
@@ -148,9 +175,10 @@ The system uses a centralized configuration approach:
 
 Models are saved during training with the following information:
 - Model weights
-- Training configuration
+- Training configuration with dataset split information
 - Optimization state
 - Best validation metrics
+- Enhanced regularization parameters
 
 ### Visualization
 
@@ -169,3 +197,16 @@ The system tracks key metrics:
 - F1-score
 - AUC-ROC
 - Confusion matrix
+- Train/validation divergence metrics
+- Generalization gap metrics
+
+### Enhanced Regularization
+
+To address overfitting and ensure generalization to the Harvard validation set, the system implements:
+
+1. **Aggressive Dropout**: Increased from 0.5 to 0.7
+2. **Feature-Level Dropout**: Additional 0.2 dropout in feature maps
+3. **Weight Decay**: Increased from 1e-4 to 5e-4
+4. **Gradient Clipping**: Prevents extreme weight updates
+5. **Enhanced Data Augmentation**: More aggressive rotations, jitter, and point dropout
+6. **Point Dropout**: Simulates occlusion in point clouds

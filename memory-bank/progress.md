@@ -31,6 +31,10 @@ The project is in its early stages with focus primarily on Pipeline A implementa
 
 ### In Progress
 
+- 🔄 Major dataset split restructuring
+  - ✅ Decided to use MIT sequences for training, Harvard sequences for validation
+  - 🔄 Implementing the new dataset loading logic
+  - 🔄 Adapting training parameters to ensure generalization to Harvard validation set
 - 🔄 Addressing model overfitting issues
   - ✅ Identified root causes: model capacity vs. dataset size and train/val split methodology
   - ✅ Updated configuration parameters with stronger regularization and augmentation
@@ -38,9 +42,6 @@ The project is in its early stages with focus primarily on Pipeline A implementa
 - 🔄 Data augmentation enhancement for point clouds
   - ✅ Increased rotation range, jitter, and scale variation
   - 🔄 Implementing point dropout and random subsampling
-- 🔄 Improving generalization performance
-  - 🔄 Designing sequence-based validation strategy
-  - 🔄 Adding train/validation divergence monitoring
 - 🔄 Balancing model complexity with dataset size
   - 🔄 Testing reduced embedding dimensions
   - 🔄 Comparing DGCNN and PointNet generalization
@@ -48,20 +49,23 @@ The project is in its early stages with focus primarily on Pipeline A implementa
 
 ### Not Started
 
-- ❌ Thorough evaluation on Harvard test data
+- ❌ Thorough evaluation on new validation set (Harvard sequences)
 - ❌ Performance analysis and comparison with baseline
 - ❌ Integration of optimal model into final pipeline
 
 ### Known Issues
 
-- 🐞 **Current Focus**: Training metrics (accuracy, F1-score) increase while validation metrics stagnate, indicating overfitting
+- 🐞 **Current Focus**: Previously, training metrics (accuracy, F1-score) increased while validation metrics stagnated
   - 🔍 Root cause identified: Model capacity too high for dataset size + non-optimal validation split
-  - 🛠️ Solution in progress: Enhanced regularization, improved validation strategy
-- 🐞 Train/validation split strategy using random frame-level split from same MIT sequences may not properly test generalization
+  - 🛠️ Solution in progress: Enhanced regularization and complete restructuring of dataset split
+- 🐞 New dataset configuration needs to ensure model generalizes well from MIT training to Harvard validation sequences
+- 🐞 **Label Format Inconsistency**: The harvard_tea_2 dataset only has the "depth" label format while other datasets have the "depthTSDF" label format
+  - 🛠️ Requires special handling in the data loading pipeline
+  - 🛠️ May affect validation results if not properly processed
 - 🐞 Handling of invalid depth values needs improvement
 - 🐞 Point cloud sampling strategy may need optimization
 - 🐞 Need to address missing table labels in some frames
-- 🐞 Potential class imbalance in training/validation splits
+- 🐞 Potential class imbalance in new training/validation configuration
 
 ## Pipeline B: RGB to Depth to Classification
 
@@ -110,6 +114,19 @@ Planned activities:
 
 ## Key Decision Evolution
 
+### Dataset Split Strategy
+
+Initial approach: Use MIT sequences for training with random 80/20 split for validation, and Harvard sequences for testing.
+
+Previous issue: Validation data was too similar to training data, not providing a strong generalization signal.
+
+Current strategy:
+- Using MIT sequences (~290 frames) for training (larger dataset)
+- Using Harvard sequences (~98 frames) for validation (smaller dataset)
+- Test dataset to remain empty for now
+- This approach provides a much stronger test of generalization
+- Uses the larger dataset for training while ensuring validation tests generalization to a different data distribution
+
 ### Model Architecture
 
 Initial decision: Use DGCNN as primary architecture due to its strong performance on point cloud tasks.
@@ -143,10 +160,11 @@ Initial approach: Standard training with early stopping based on validation F1-s
 Previous direction: Enhanced monitoring of training/validation divergence.
 
 Current implementation:
+- Fundamentally changed the dataset split strategy for better generalization measurement
 - Added gradient clipping to prevent extreme weight updates
 - Added mixup parameter for implementation
 - Planning to implement train/validation divergence metric for early warning
-- Identified need for sequence-based validation split instead of random frame-based
+- Will need to establish new baselines with the new dataset configuration
 
 ## Milestones and Timeline
 

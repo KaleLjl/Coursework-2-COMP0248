@@ -22,9 +22,16 @@ The labels grouped under a single "table" class include:
 The project excludes cabinets and kitchen counters from the table class.
 
 ## Data Split
+
+Original assignment split:
 - **Training Data**: MIT sequences (mit_32_d507, mit_76_459, mit_76_studyroom, mit_gym_z_squash, mit_lab_hj) - 290 RGBD frames
 - **Test Data 1**: Harvard sequences (harvard_c5, harvard_c6, harvard_c11, harvard_tea_2) - 98 RGBD frames
 - **Test Data 2**: UCL sequence captured with an Intel RealSense Camera (max 50 RGBD frames)
+
+Current implementation split (to address generalization issues):
+- **Training Data**: MIT sequences (mit_32_d507, mit_76_459, mit_76_studyroom, mit_gym_z_squash, mit_lab_hj) - 290 RGBD frames
+- **Validation Data**: Harvard sequences (harvard_c5, harvard_c6, harvard_c11, harvard_tea_2) - 98 RGBD frames
+- **Test Data**: Empty for now
 
 ## Tasks
 1. **Binary Classification**: Determine if there's a table in the image
