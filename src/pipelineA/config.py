@@ -1,8 +1,12 @@
 import os
 from pathlib import Path
 
+# Get the project root directory (two levels up from this file)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
 # Dataset paths
-BASE_DATA_DIR = Path("/cs/student/projects1/rai/2024/jialeli/Objection-Coursework2/data/CW2-Dataset/data")
+BASE_DATA_DIR = PROJECT_ROOT / "data" / "CW2-Dataset" / "data"
+``
 
 # Training sequences (MIT)
 TRAIN_SEQUENCES = {
@@ -38,7 +42,9 @@ MODEL_PARAMS = {
     "model_type": "dgcnn",  # dgcnn, pointnet, point_transformer
     "k": 20,                # k in kNN graph
     "emb_dims": 1024,       # Embedding dimensions
-    "dropout": 0.5,         # Dropout rate
+    "dropout": 0.7,         # Dropout rate (increased from 0.5 to help with overfitting)
+    "feature_dropout": 0.2, # Feature-level dropout rate
+    "reduced_model": False, # Whether to use reduced complexity model
 }
 
 # Training parameters
@@ -46,24 +52,26 @@ TRAIN_PARAMS = {
     "batch_size": 16,
     "num_epochs": 100,
     "learning_rate": 0.001,
-    "weight_decay": 1e-4,
+    "weight_decay": 5e-4,   # Increased from 1e-4 to provide stronger regularization
     "early_stopping_patience": 15,
     "lr_scheduler_patience": 5,
     "lr_scheduler_factor": 0.5,
+    "gradient_clip": 1.0,   # Maximum gradient norm for gradient clipping
+    "mixup_alpha": 0.2,     # Alpha parameter for mixup augmentation (0 to disable)
 }
 
 # Data augmentation parameters
 AUGMENTATION_PARAMS = {
     "enabled": True,
-    "rotation_y_range": [-15, 15],  # Degrees
-    "jitter_sigma": 0.01,
-    "jitter_clip": 0.05,
-    "scale_range": [0.8, 1.2],
-    "rotation_z": True  # Rotation around Z axis for orientation invariance
+    "rotation_y_range": [-30, 30],   # Increased from [-15, 15] for more rotation variation
+    "jitter_sigma": 0.015,           # Increased from 0.01 for more noise variation
+    "jitter_clip": 0.05, 
+    "scale_range": [0.75, 1.25],     # Increased from [0.8, 1.2] for more scale variation
+    "rotation_z": True,              # Rotation around Z axis for orientation invariance
+    "point_dropout_ratio": 0.1,      # Randomly drop this ratio of points (simulates occlusion)
+    "random_subsample": True,        # Apply random subsampling during training
+    "subsample_range": [0.7, 0.95],  # Range for random subsampling ratio
 }
-
-# Project root directory
-PROJECT_ROOT = Path("/cs/student/projects1/rai/2024/jialeli/Objection-Coursework2")
 
 # Paths for saving models and results
 WEIGHTS_DIR = PROJECT_ROOT / "weights" / "pipelineA"

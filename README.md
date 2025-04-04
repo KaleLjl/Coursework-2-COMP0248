@@ -1,4 +1,4 @@
-# Table Detection from 3D Point Clouds - Pipeline A
+/cs/student/projects1/rai/2024/jialeli/# Table Detection from 3D Point Clouds - Pipeline A
 
 ## Overview
 
@@ -7,7 +7,7 @@ Pipeline A is a computer vision system for detecting tables in 3D point clouds d
 2. Using a deep learning classifier to determine if there's a table in the scene (binary classification)
 
 ## Requirements
-
+/cs/student/projects1/rai/2024/jialeli/
 - Python 3.8+
 - PyTorch 1.8+
 - Open3D
@@ -106,6 +106,40 @@ Key training parameters:
 - `--k`: Number of nearest neighbors for DGCNN (default: 20)
 - `--train_val_split`: Train/validation split ratio (default: 0.8)
 
+#### TensorBoard Visualization
+
+To monitor training progress in real-time using TensorBoard:
+
+1. Install TensorBoard if not already installed:
+```bash
+pip install tensorboard
+```
+
+2. Start TensorBoard by pointing it to the logs directory:
+```bash
+tensorboard --logdir=logs/pipelineA
+```
+
+3. Open your web browser and navigate to:
+```
+http://localhost:6006
+```
+
+TensorBoard provides interactive visualizations of:
+- Training and validation loss curves
+- Accuracy metrics over time
+- F1-score progression
+- Precision and Recall values
+- Learning rate changes
+
+The logs are automatically saved during training in the `logs/pipelineA` directory with timestamps, allowing you to compare different training runs.
+
+Training and evaluation results are saved to:
+- `weights/pipelineA/`: Model checkpoints
+- `logs/pipelineA/`: Training logs and metrics
+- `results/pipelineA/`: Evaluation metrics and visualizations
+
+
 ### 2. Evaluating a Trained Model
 
 ```bash
@@ -168,11 +202,6 @@ The pipeline tracks the following metrics:
 - F1-score: Harmonic mean of precision and recall
 - AUC-ROC: Area under the receiver operating characteristic curve
 - Confusion matrix: Detailed breakdown of predictions
-
-Training and evaluation results are saved to:
-- `weights/pipelineA/`: Model checkpoints
-- `logs/pipelineA/`: Training logs and metrics
-- `results/pipelineA/`: Evaluation metrics and visualizations
 
 ## Troubleshooting
 

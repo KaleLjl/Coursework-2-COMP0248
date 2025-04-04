@@ -125,6 +125,7 @@ def train(args):
     )
     
     plot_metrics(
+        
         train_losses,
         val_losses,
         'loss',

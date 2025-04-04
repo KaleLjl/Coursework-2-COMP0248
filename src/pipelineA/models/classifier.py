@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+    
 def knn(x, k):
     """k-nearest neighbors.
     
@@ -65,7 +65,7 @@ def get_graph_feature(x, k=20, idx=None):
     return edge_feature
 
 class EdgeConv(nn.Module):
-    """Edge Convolution layer for DGCNN."""
+    """Edge Convolution layer for N."""
     
     def __init__(self, in_channels, out_channels, k=20):
         """Initialize EdgeConv layer.
@@ -299,3 +299,4 @@ def get_model(model_type='dgcnn', num_classes=2, **kwargs):
         )
     else:
         raise ValueError(f"Unknown model type: {model_type}")
+
