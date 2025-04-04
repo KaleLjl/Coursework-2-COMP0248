@@ -2,13 +2,13 @@
 
 ## Current Focus
 
-The project is currently focused on the following areas:
+The primary focus is now on **investigating the cause of the high, initially flat validation F1 score** (observed around 0.83 in early epochs). The leading hypothesis is that this score reflects the model initially predicting the majority class ("no table") in an imbalanced Harvard validation set.
 
-1. **Pipeline A Improvement**: The depth-to-point-cloud-to-classification pipeline is being restructured with a major dataset split change to improve generalization performance.
-
-2. **Dataset Split Restructuring**: The dataset split has been completely revised: MIT sequences (larger dataset) will be used for training, Harvard sequences (smaller dataset) for validation, and the test dataset will remain empty for now. This should provide a stronger validation signal and better measure of generalization.
-
-3. **Model Overfitting Investigation**: In-depth analysis confirms the model has high capacity relative to the limited training data, allowing it to memorize training examples rather than learn generalizable features. The new dataset split should help address this issue.
+Key areas:
+1.  **Validation Set Analysis**: Confirming the class imbalance in the Harvard dataset.
+2.  **Code Review**: Examining evaluation logic (`evaluate.py`), training loop (`train.py`), and model initialization (`classifier.py`) for factors contributing to this initial behavior.
+3.  **Training with Optimal Diagnostic Config**: Once the initial score behavior is understood, the plan remains to run a full training session using the 'augmentation only' configuration (augmentation enabled, dropout=0.0, weight_decay=0.0, gradient_clip=0.0) identified as promising in diagnostics.
+4.  **Performance Evaluation**: Analyzing the results of the 'augmentation only' run, monitoring for overfitting, and comparing against the initial baseline behavior.
 
 ## Recent Changes
 
@@ -33,30 +33,36 @@ Recent work has focused on implementing the strategy to address overfitting:
         *   Updated optimizer and scheduler instantiation to use parameters (`weight_decay`, `lr_scheduler_factor`, `lr_scheduler_patience`) from `config.py`.
         *   Implemented gradient clipping in `train_epoch` using `TRAIN_PARAMS['gradient_clip']`.
         *   Simplified command-line arguments, removing those now sourced from `config.py`.
-6.  **Depth Warning Debugging**:
+6.  **Depth Warning Debugging & `harvard_tea_2` Handling**:
     *   Identified "No valid depth values" warnings during training, specifically for `harvard_tea_2` sequence.
     *   Enhanced logging in `depth_to_pointcloud.py` to print full paths and raw depth statistics.
     *   Confirmed the issue was caused by the `max_depth` threshold (10.0m) being too low for the millimeter-based raw depth values in `harvard_tea_2` after conversion to meters.
     *   Fixed by increasing `POINT_CLOUD_PARAMS['max_depth']` to `20.0` in `config.py`.
     *   Corrected an `IndentationError` introduced during debugging in `depth_to_pointcloud.py`.
+    *   Confirmed `dataset.py` uses a `use_raw_depth` flag to correctly select the `depth` directory (vs `depthTSDF`) and pass this flag to `create_pointcloud_from_depth` for appropriate scaling (likely mm to m conversion).
+7.  **Validation Data Shuffling**:
+    *   Modified `dataset.py`: Updated `create_data_loaders` to set `shuffle=True` for the `val_loader` as requested.
 
 ## Next Steps
 
-With the core code changes for the overfitting mitigation strategy complete and the depth warning issue resolved, the immediate next steps are:
+Priority is now investigating the initial high validation score:
 
-1.  **Testing and Validation**:
-    *   Re-run the updated training script (`train.py`) with the corrected configuration (MIT train, Harvard val, `max_depth=20.0`, enhanced regularization/augmentation).
-    *   Monitor training progress using TensorBoard, paying close attention to the validation metrics (especially F1-score) on the Harvard set and the train/validation divergence. Ensure the depth warnings are gone.
-    *   Evaluate the performance of the best model checkpoint on the Harvard validation set.
-    *   Compare generalization performance (e.g., DGCNN vs. PointNet, different `emb_dims`).
-    *   Create visualizations to understand model behavior.
-
-2.  **Further Training Enhancements (Optional/Iterative)**:
-    *   Based on initial results, consider implementing mixup augmentation (`mixup_alpha` parameter exists in `config.py` but is not yet used in `train.py`).
-    *   Implement more detailed monitoring of train/validation divergence.
-    *   Experiment with reduced model complexity (e.g., `emb_dims=512` via `config.py`).
-
-3.  **Memory Bank Update**: Update `progress.md` after initial training runs.
+1.  **Update Memory Bank**: Document recent changes, resolved environment issue, validation score investigation priority, and updated plan. (In Progress).
+2.  **Calculate Validation Set Distribution**: Implement logic (potentially a temporary script or modification in `dataset.py`) to count the number of "table" vs "no table" samples in the Harvard validation set loaded by `val_dataset`.
+3.  **Review Evaluation Logic (`evaluate.py`)**: Check metric calculations (Precision, Recall, F1) for correctness, especially regarding averaging methods (`binary`, `micro`, `macro`, `weighted`) and handling of zero divisions in the context of potential imbalance.
+4.  **Review Training Logic (`train.py`)**: Confirm `model.eval()` is correctly used before validation. Check loss function setup.
+5.  **Review Model Initialization (`classifier.py`)**: Briefly check weight initialization.
+6.  **Set 'Augmentation Only' Configuration**: Once the initial score behavior is understood, ensure `config.py` reflects:
+    *   `MODEL_PARAMS['dropout'] = 0.0`
+    *   `MODEL_PARAMS['feature_dropout'] = 0.0`
+    *   `TRAIN_PARAMS['weight_decay'] = 0.0`
+    *   `TRAIN_PARAMS['gradient_clip'] = 0.0`
+    *   `AUGMENTATION_PARAMS['enabled'] = True`
+    *   `TRAIN_PARAMS['num_epochs'] = 100` # Or adjust based on findings
+7.  **Run Training**: Execute `train.py` with the 'augmentation only' configuration.
+8.  **Analyze Performance**: Monitor logs, evaluate peak performance, check for overfitting, compare against initial behavior.
+9.  **Iterate (If Needed)**: If performance is good but overfitting occurs, consider reintroducing mild regularization.
+10. **Memory Bank Update**: Update `progress.md` with investigation findings and training results.
 
 ## Active Decisions and Considerations
 
@@ -128,7 +134,20 @@ Key insights gained from investigating the overfitting issue:
    - With the revised dataset split, we expect to see new training dynamics that will need careful monitoring
 
 4. **Generalization Challenges**:
-   - Point cloud data presents unique generalization challenges compared to images
-   - Domain-specific augmentations are crucial for improving generalization
-   - Sequence-specific patterns may be learned instead of general table characteristics
-   - The true test of generalization will now be performance on the Harvard validation sequences
+   - Point cloud data presents unique generalization challenges compared to images.
+   - Domain-specific augmentations are crucial for improving generalization.
+   - Sequence-specific patterns may be learned instead of general table characteristics.
+   - The true test of generalization will now be performance on the Harvard validation sequences.
+5. **Flat Validation Metrics Diagnosis**:
+   - Diagnostic tests confirmed that the high dropout rates (`dropout=0.7`, `feature_dropout=0.2`) used previously were the primary cause of the flat validation metrics.
+   - Configurations without dropout, even with augmentation and other regularization (weight decay, gradient clipping), showed dynamic validation performance.
+   - This indicates the model was overly constrained by the high dropout, preventing effective learning on the validation set distribution.
+6. **Baseline Run Insights & Diagnostic Summary**:
+   - Diagnostic tests isolated high dropout (`0.7`/`0.2`) as the cause of flat validation metrics.
+   - A diagnostic run with only augmentation enabled achieved the highest peak F1 (0.9306) compared to runs with weight decay/clipping enabled (peak F1=0.8333).
+   - This suggests the best path forward is to start with the minimal 'augmentation only' configuration and potentially add back *mild* regularization later if overfitting becomes an issue.
+7. **Initial F1 Score Insight**:
+   - The consistent starting validation F1 score of 0.8333 (with accuracy 0.7143) strongly suggests the model initially defaults to predicting the majority class ("no table"), and 0.8333 is the F1 score for that majority class given the likely 71.4% prevalence in the validation set.
+   - The unused `mixup_alpha` parameter remains a potential tool if needed later.
+8. **Environment Stability**: The previous `ModuleNotFoundError` was confirmed by the user to be related to environment activation and is considered resolved.
+9. **Validation Data Loading**: The validation loader now shuffles data (`shuffle=True` in `dataset.py`), matching the training loader behavior. This might slightly change epoch-to-epoch validation scores compared to non-shuffled evaluation, but the overall trend should be similar.

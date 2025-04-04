@@ -284,7 +284,7 @@ def create_data_loaders(data_root, train_sequences, val_sequences, test_sequence
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
-        shuffle=False, # No shuffling for validation
+        shuffle=True, # Shuffle validation data as requested
         num_workers=num_workers,
         pin_memory=True,
         collate_fn=collate_fn

@@ -36,29 +36,39 @@ The project is in its early stages with focus primarily on Pipeline A implementa
 - ✅ **Training Script Updates**: Aligned `train.py` with new dataset split, regularization, augmentation, and configuration loading.
 - ✅ **Label Format Handling**: Confirmed existing logic in `dataset.py` handles `harvard_tea_2` format.
 - ✅ **Depth Warning Resolution**: Identified cause of "No valid depth values" warning (low `max_depth` for `harvard_tea_2`) and fixed by increasing `max_depth` in `config.py`. Corrected related `IndentationError`.
+- ✅ **Validation Data Shuffling**: Updated `dataset.py` to shuffle validation data (`shuffle=True`) as requested.
 
 ### In Progress
 
-- 🔄 **Testing & Validation**: Ready to run training experiments with the corrected configuration and code.
-- 🔄 **Hyperparameter Optimization**: Tuning learning rate, batch size, etc., based on upcoming results.
-- 🔄 **Model Complexity Balancing**: Planning experiments to test reduced embedding dimensions (e.g., 512).
-- 🔄 **Architecture Comparison**: Planning experiments to compare DGCNN vs. PointNet generalization.
+- 🔄 **Investigate Initial Validation Score**: Analyzing why the validation F1 score starts high (~0.83) and stays flat initially. Hypothesis: Model predicts majority class in imbalanced Harvard set.
+    -   Calculating validation set class distribution.
+    -   Reviewing evaluation logic (`evaluate.py`).
+    -   Reviewing training loop (`train.py`).
+    -   Reviewing model initialization (`classifier.py`).
+- 🔄 **Prepare 'Augmentation Only' Run**: Preparing configuration (`config.py`) for the run (dropout=0.0, WD=0.0, clip=0.0, augment=True).
 
 ### Not Started
 
-- ❌ Running training experiments with the corrected code.
-- ❌ Thorough evaluation and analysis of results from the new configuration.
+- ❌ Calculating exact validation set class distribution.
+- ❌ Reviewing `evaluate.py`, `train.py`, `classifier.py` for initial score behavior.
+- ❌ Running full training experiment with the 'augmentation only' configuration.
+- ❌ Thorough evaluation and analysis of the 'augmentation only' results.
+- ❌ Re-introducing mild regularization (e.g., small weight decay or dropout) if overfitting occurs in the 'augmentation only' run.
+- ❌ Implementing mixup augmentation (if needed).
 - ❌ Performance comparison with baseline/previous attempts.
 - ❌ Integration of optimal model into final pipeline.
-- ❌ Implementation of further enhancements (e.g., mixup, detailed divergence monitoring).
+- ❌ Implementation of detailed train/validation divergence monitoring.
 
 ### Known Issues
 
-- 🐞 **Generalization Performance**: Need to verify if the implemented changes successfully improve generalization from MIT to Harvard sequences (primary focus of next training runs).
+- ✅ **Environment Instability**: Resolved (Confirmed by user as activation issue).
+- 🐞 **Potential Overfitting**: The 'augmentation only' configuration (minimal regularization) might be prone to overfitting later in training. Needs monitoring.
+- 🐞 **Initial F1 Score**: High starting F1 (~0.83) likely reflects model predicting the majority class in an imbalanced validation set. Investigation ongoing.
 - 🐞 Handling of invalid depth values needs improvement (lower priority).
-- 🐞 Point cloud sampling strategy may need optimization (lower priority).
+- 🐞 Point cloud sampling strategy ('random') may need optimization (lower priority).
 - 🐞 Need to address missing table labels in some frames (lower priority).
-- 🐞 Potential class imbalance in new training/validation configuration (monitor during evaluation).
+- 🐞 Potential class imbalance in Harvard validation set (likely ~71.4% majority class based on initial metrics). Investigation ongoing.
+- ℹ️ Validation data is now shuffled, which may slightly alter epoch-to-epoch scores compared to previous non-shuffled runs.
 
 ## Pipeline B: RGB to Depth to Classification
 
@@ -150,21 +160,28 @@ Current implementation:
 
 Initial approach: Standard training with early stopping based on validation F1-score.
 
-Previous direction: Enhanced monitoring of training/validation divergence.
+Previous direction: Enhanced monitoring, aggressive regularization/augmentation to combat overfitting, leading to flat validation metrics.
 
-Current implementation:
-- Fundamentally changed the dataset split strategy for better generalization measurement
-- Added gradient clipping to prevent extreme weight updates
-- Added mixup parameter for implementation
-- Planning to implement train/validation divergence metric for early warning
-- Will need to establish new baselines with the new dataset configuration
+Diagnosis Result: High dropout rates (`0.7` standard, `0.2` feature) were identified as the cause of flat validation metrics.
+
+Current Strategy:
+- Dataset Split: MIT (train), Harvard (validation).
+- **Priority:** Investigate the high initial validation F1 score (imbalance hypothesis).
+- Configuration (Post-Investigation): Use 'augmentation only' settings identified in diagnostics (Augmentation=True, Dropout=0.0, WD=0.0, Clip=0.0).
+- **Next Steps:** Calculate validation distribution, review relevant code (`evaluate.py`, `train.py`, `classifier.py`), then run the 'augmentation only' config, analyze results (especially for overfitting), and potentially reintroduce mild regularization if needed.
 
 ## Milestones and Timeline
 
 | Milestone | Target Date | Status |
 |-----------|-------------|--------|
 | Pipeline A implementation | TBD | 75% Complete |
-| Address overfitting in Pipeline A | TBD | Implementation & Debugging Complete, Testing Pending |
+| Address overfitting in Pipeline A | TBD | Implemented anti-overfitting measures |
+| Diagnose Flat Validation Metrics | TBD | **Complete** |
+| Identify Optimal Diagnostic Configuration | TBD | **Complete** ('Augmentation Only') |
+| Resolve Environment Issues | TBD | **Complete** |
+| Investigate Initial High Validation Score | TBD | **In Progress** |
+| Train and Evaluate 'Augmentation Only' Config | TBD | **Pending** (Blocked by Investigation) |
+| Achieve Improved Validation Performance | TBD | Pending Training Run |
 | Pipeline B implementation | TBD | Not Started |
 | Pipeline C implementation | TBD | Not Started |
 | RealSense data collection | TBD | Not Started |

@@ -31,7 +31,7 @@ TEST2_SEQUENCES = {}  # To be collected
 POINT_CLOUD_PARAMS = {
     "num_points": 2048,  # Number of points to sample
     "normalize": True,   # Whether to normalize point cloud
-    "sampling_method": "fps",  # fps, random, or None
+    "sampling_method": "random",  # Changed from fps to random
     "max_depth": 20.0,   # Increased from 10.0 to handle larger distances in harvard_tea_2
     "min_depth": 0.1     # Minimum depth value in meters
 }
@@ -39,29 +39,29 @@ POINT_CLOUD_PARAMS = {
 # Model parameters
 MODEL_PARAMS = {
     "model_type": "dgcnn",  # dgcnn, pointnet, point_transformer
-    "k": 20,                # k in kNN graph
-    "emb_dims": 1024,       # Embedding dimensions
-    "dropout": 0.7,         # Dropout rate (increased from 0.5 to help with overfitting)
-    "feature_dropout": 0.2, # Feature-level dropout rate
+    "k": 10,                # k in kNN graph (Reduced from 20)
+    "emb_dims": 512,       # Embedding dimensions (Reduced from 1024) - Keeping reduced for now
+    "dropout": 0.0,         # Disabling dropout
+    "feature_dropout": 0.0, # Disabling feature dropout
     "reduced_model": False, # Whether to use reduced complexity model
 }
 
 # Training parameters
 TRAIN_PARAMS = {
     "batch_size": 16,
-    "num_epochs": 100,
-    "learning_rate": 0.001,
-    "weight_decay": 5e-4,   # Increased from 1e-4 to provide stronger regularization
-    "early_stopping_patience": 15,
+    "num_epochs": 100,      # Restore full epochs for proper training run
+    "learning_rate": 0.001, # Keeping standard LR for now
+    "weight_decay": 0.0,    # Disabling weight decay
+    "early_stopping_patience": 100,
     "lr_scheduler_patience": 5,
     "lr_scheduler_factor": 0.5,
-    "gradient_clip": 1.0,   # Maximum gradient norm for gradient clipping
-    "mixup_alpha": 0.2,     # Alpha parameter for mixup augmentation (0 to disable)
+    "gradient_clip": 0.0,   # Disabling gradient clipping
+    "mixup_alpha": 0.0,     # Ensure mixup is disabled
 }
 
 # Data augmentation parameters
 AUGMENTATION_PARAMS = {
-    "enabled": True,
+    "enabled": True,        # DIAGNOSTIC STEP: Re-enabling augmentation
     "rotation_y_range": [-30, 30],   # Increased from [-15, 15] for more rotation variation
     "jitter_sigma": 0.015,           # Increased from 0.01 for more noise variation
     "jitter_clip": 0.05, 

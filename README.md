@@ -93,18 +93,35 @@ Pipeline A implements two point cloud processing architectures:
 
 ### 1. Training a Model
 
+**Note:** Many training and model parameters (e.g., dropout, weight decay, embedding dimensions, learning rate schedule parameters) are now primarily controlled via `src/pipelineA/config.py`. Command-line arguments override defaults where applicable.
+
+**General Training Command:**
+
 ```bash
-python -m src.pipelineA.main train --model_type dgcnn --num_epochs 100 --batch_size 16 --augment
+python src/pipelineA/training/train.py --model_type dgcnn --num_epochs 100 --batch_size 16 --learning_rate 0.001 --augment --k 20 --seed 42 --device cuda
 ```
 
-Key training parameters:
-- `--model_type`: Model architecture (`dgcnn` or `pointnet`)
-- `--num_epochs`: Number of training epochs
-- `--batch_size`: Batch size for training
-- `--augment`: Enable data augmentation
-- `--learning_rate`: Initial learning rate
-- `--k`: Number of nearest neighbors for DGCNN (default: 20)
-- `--train_val_split`: Train/validation split ratio (default: 0.8)
+**Current Recommended Command ('Augmentation Only' Strategy):**
+
+This command assumes you have configured `src/pipelineA/config.py` for the 'augmentation only' strategy (e.g., `MODEL_PARAMS['dropout'] = 0.0`, `TRAIN_PARAMS['weight_decay'] = 0.0`, `AUGMENTATION_PARAMS['enabled'] = True`).
+
+```bash
+python src/pipelineA/training/train.py --model_type dgcnn --augment
+```
+*(This uses default values for epochs, batch size, learning rate, k, seed, device from `config.py` or the script's defaults, enabling only augmentation via the flag)*
+
+**Key Command-Line Training Arguments:**
+- `--model_type`: Model architecture (`dgcnn` or `pointnet`). Default: `dgcnn`.
+- `--num_epochs`: Number of training epochs. Default: From `config.py` (e.g., 100).
+- `--batch_size`: Batch size for training. Default: From `config.py` (e.g., 16).
+- `--learning_rate`: Initial learning rate. Default: From `config.py` (e.g., 0.001).
+- `--augment`: Flag to enable data augmentation (defined in `config.py`).
+- `--k`: Number of nearest neighbors for DGCNN. Default: From `config.py` (e.g., 20).
+- `--num_workers`: Number of data loading workers. Default: 4.
+- `--seed`: Random seed for reproducibility. Default: 42.
+- `--device`: Device to use (`cuda` or `cpu`). Default: `cuda`.
+
+*(Note: Arguments like `--dropout`, `--weight_decay`, `--emb_dims`, `--train_val_split` are no longer used as command-line arguments and are controlled via `config.py`)*
 
 #### TensorBoard Visualization
 
@@ -142,23 +159,26 @@ Training and evaluation results are saved to:
 
 ### 2. Evaluating a Trained Model
 
+*(Note: The evaluation script might need updates to align with the current training script structure and configuration loading. The command below is based on the previous structure.)*
+
 ```bash
-python -m src.pipelineA.main evaluate --model_type dgcnn --checkpoint /path/to/checkpoint.pt --test_set 1 --visualize
+# Example - Check src/pipelineA/training/evaluate.py for current usage
+python src/pipelineA/training/evaluate.py --model_type dgcnn --checkpoint weights/pipelineA/dgcnn_YYYYMMDD_HHMMSS/model_best.pt
 ```
 
-Key evaluation parameters:
-- `--model_type`: Model architecture (must match the trained model)
-- `--checkpoint`: Path to model checkpoint file
-- `--test_set`: Test set to use (1: Harvard, 2: RealSense)
-- `--visualize`: Enable visualization of predictions
-- `--num_visualizations`: Number of samples to visualize (default: 5)
+Key evaluation parameters (check `evaluate.py` for current arguments):
+- `--model_type`: Model architecture (must match the trained model).
+- `--checkpoint`: Path to model checkpoint file.
+- Potentially others like `--batch_size`, `--device`.
 
 ### 3. Testing Individual Components
+
+*(Note: The test script might need updates to align with current code.)*
 
 To validate pipeline components:
 
 ```bash
-python -m src.pipelineA.test_pipeline
+python src/pipelineA/test_pipeline.py
 ```
 
 This runs tests for:
