@@ -171,7 +171,29 @@ Key evaluation parameters (check `evaluate.py` for current arguments):
 - `--checkpoint`: Path to model checkpoint file.
 - Potentially others like `--batch_size`, `--device`.
 
-### 3. Testing Individual Components
+### 3. Visualizing Test Predictions on Images
+
+To visualize the model's predictions overlaid on the corresponding RGB images for the test set:
+
+```bash
+python src/pipelineA/visualize_test_predictions.py --model_path <path_to_best_model.pt>
+```
+
+**Example using the best DGCNN model from Experiment 1:**
+```bash
+python src/pipelineA/visualize_test_predictions.py --model_path weights/pipelineA/dgcnn_20250405_145031/model_best.pt
+```
+
+**Key Arguments:**
+- `--model_path`: Path to the trained model checkpoint file. Default: `weights/pipelineA/dgcnn_20250405_145031/model_best.pt`.
+- `--output_dir`: Directory where annotated images will be saved. Default: `results/pipelineA/test_set_visualizations/`.
+- `--data_root`: Root directory of the dataset. Default: From `config.py`.
+- `--num_workers`: Number of data loading workers. Default: 4.
+- `--use_cuda` / `--no_cuda`: Force usage of CUDA or CPU. Default: Use CUDA if available.
+
+The script will generate images in the specified output directory, showing the RGB image annotated with "Predicted: [Label]" and "Ground Truth: [Label]". The text color indicates correctness (green for correct, red for incorrect).
+
+### 4. Testing Individual Components
 
 *(Note: The test script might need updates to align with current code.)*
 

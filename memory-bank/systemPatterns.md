@@ -60,6 +60,9 @@ graph TD
    - `config.py`: Centralizes configuration parameters (including model architecture details like `emb_dims`, `dropout`, `feature_dropout`). Used by both `train.py` and `evaluate.py` for model instantiation.
    - Loads validation/test frame lists from pickle files
 
+5. **Visualization**:
+   - `visualize_test_predictions.py`: Loads a trained model, runs inference on the test set (Test Set 1), and saves annotated RGB images showing the predicted vs. ground truth labels.
+
 ### Data Flow
 
 ```mermaid

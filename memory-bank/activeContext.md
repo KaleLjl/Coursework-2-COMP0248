@@ -14,6 +14,7 @@ The primary focus is now on **concluding the Pipeline A improvement phase** and 
 2.  **Configuration Update (Exp 5)**: Modified `src/pipelineA/config.py` to set `MODEL_PARAMS['model_type'] = 'pointnet'` (keeping D=0.5, WD=0, FD=0).
 3.  **Execute Training (Exp 5 - PointNet)**: Ran `src/pipelineA/training/train.py --model pointnet`. Best validation F1: 0.8293, Acc: 0.7083 at Epoch 2. Run ID: `pointnet_20250405_155003`.
 4.  **Execute Evaluation (Exp 5 - PointNet)**: Ran `src/pipelineA/training/evaluate.py --model_type pointnet` on the best checkpoint. Results: Acc: 0.7200, Precision: 0.7200, Recall: 1.0000, F1: 0.8372, AUC: 0.4226. Poor performance.
+5.  **Create Visualization Script**: Created `src/pipelineA/visualize_test_predictions.py` to load the best model, run inference on Test Set 1, and save annotated RGB images showing predictions vs ground truth to `results/pipelineA/test_set_visualizations/`.
 
 *(Previous changes retained below)*
 1.  **Memory Bank Refresh**: Read all core memory bank files to establish context.
@@ -41,10 +42,11 @@ Work has focused on implementing the new data split strategy:
 
 ## Next Steps
 
-1.  **Update Memory Bank**: Document Experiment 5 results and conclusion in `activeContext.md` (this update) and `progress.md`.
-2.  **Revert Config**: Modify `src/pipelineA/config.py` to set `MODEL_PARAMS['model_type'] = 'dgcnn'` (reverting from PointNet).
-3.  **Propose Next Phase**: Ask user to choose between starting Pipeline B or Pipeline C.
-4.  **(Lower Priority)** RealSense data collection.
+1.  **Update Memory Bank**: Document Experiment 5 results, conclusion, and visualization script creation in `activeContext.md` (this update), `systemPatterns.md`, and `progress.md`.
+2.  **Execute Visualization**: Run the newly created `src/pipelineA/visualize_test_predictions.py` script to generate annotated images for Test Set 1 using the best DGCNN model (Exp 1).
+3.  **Revert Config**: Modify `src/pipelineA/config.py` to set `MODEL_PARAMS['model_type'] = 'dgcnn'` (reverting from PointNet).
+4.  **Propose Next Phase**: Ask user to choose between starting Pipeline B or Pipeline C after reviewing visualizations.
+5.  **(Lower Priority)** RealSense data collection.
 
 ## Active Decisions and Considerations
 

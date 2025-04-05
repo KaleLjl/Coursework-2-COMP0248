@@ -83,6 +83,7 @@ The project is in its early stages with focus primarily on Pipeline A implementa
     - **Observation**: PointNet performed poorly, likely classifying almost everything as Table (AUC ~0.42).
 - ✅ **Analyze Experiment 5 Results**: Completed. PointNet is not suitable with current setup.
 - ✅ **Conclude Pipeline A Tuning**: Experiment 1 (DGCNN, D=0.5) remains the best configuration.
+- ✅ **Create Test Result Visualization Script**: Created `src/pipelineA/visualize_test_predictions.py` to annotate RGB images with predictions.
 
 ### In Progress
 
@@ -151,7 +152,7 @@ Planned activities:
 - ✅ Setting up experiment tracking with TensorBoard
 - ✅ Initial metric visualization
 - 🔄 Enhanced monitoring for overfitting
-- ❌ Creating additional visualization scripts
+- ✅ Creating additional visualization scripts (Image annotation script created)
 
 ## Key Decision Evolution
 
@@ -252,6 +253,8 @@ Current Strategy:
 | Evaluate Experiment 5 | TBD | **Complete** |
 | Analyze Experiment 5 Results | TBD | **Complete** |
 | Update Memory Bank (Post-Exp 5) | TBD | **Complete** |
+| Create Visualization Script | TBD | **Complete** |
+| Update Memory Bank (Post-Visualization Script) | TBD | **Complete** |
 | Prepare for Next Phase | TBD | **In Progress** |
 | Pipeline B implementation | TBD | Not Started |
 | Pipeline C implementation | TBD | Not Started |
