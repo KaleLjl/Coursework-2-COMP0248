@@ -69,7 +69,7 @@ MODEL_PARAMS = {
     "model_type": "dgcnn",  # dgcnn, pointnet, point_transformer
     "k": 10,                # k in kNN graph (Reduced from 20)
     "emb_dims": 512,       # Embedding dimensions (Reduced from 1024) - Keeping reduced for now
-    "dropout": 0.0,         # Disabling dropout
+    "dropout": 0.5,         # Reverting to best dropout value from Exp 1
     "feature_dropout": 0.0, # Disabling feature dropout
     "reduced_model": False, # Whether to use reduced complexity model
 }
@@ -79,7 +79,7 @@ TRAIN_PARAMS = {
     "batch_size": 16,
     "num_epochs": 50,      # Restore full epochs for proper training run
     "learning_rate": 0.001, # Keeping standard LR for now
-    "weight_decay": 0.0,    # Disabling weight decay
+    "weight_decay": 0.0,    # Reverting weight decay for Experiment 3
     "early_stopping_patience": 100,
     "lr_scheduler_patience": 5,
     "lr_scheduler_factor": 0.5,
