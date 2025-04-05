@@ -2,18 +2,18 @@
 
 ## Current Focus
 
-The primary focus is now on **concluding the initial regularization tuning for Pipeline A** and **planning the next major phase** of the project. This involves:
-1.  **Result Analysis (Exp 4)**: Reviewing the performance metrics (Val Acc 0.9167, Test Acc 0.7800, F1 0.8533). Note that D=0.3 performed slightly worse than D=0.5 (Exp 1).
-2.  **Conclusion**: Experiment 1 (D=0.5 only) remains the best configuration (Test Acc 0.8000, F1 0.8529), despite persistent overfitting (Val-Test gap ~0.14). Further tuning of these specific parameters is unlikely to yield major gains.
-3.  **Memory Bank Update**: Documenting Experiment 4 results and the conclusion.
-4.  **Next Phase Planning**: Discuss options: Implement Pipeline B, Implement Pipeline C, explore other Pipeline A improvements (e.g., different model, augmentations).
+The primary focus is now on **concluding the Pipeline A improvement phase** and **planning the next major phase** of the project. This involves:
+1.  **Result Analysis (Exp 5 - PointNet)**: Reviewing the performance metrics (Val Acc 0.7083, Test Acc 0.7200, F1 0.8372, AUC 0.4226). PointNet performed poorly, essentially classifying everything as Table.
+2.  **Conclusion**: Pipeline A tuning complete for now. Experiment 1 (DGCNN, D=0.5) remains the best configuration (Test Acc 0.8000, F1 0.8529). Switching to PointNet was detrimental.
+3.  **Memory Bank Update**: Documenting Experiment 5 results and the conclusion.
+4.  **Next Phase Planning**: Recommend starting Pipeline B or C.
 
 ## Recent Changes
 
-1.  **Update Memory Bank (Post-Exp 3)**: Documented Experiment 3 results in `activeContext.md` and `progress.md`.
-2.  **Configuration Update (Exp 4)**: Modified `src/pipelineA/config.py` to set `MODEL_PARAMS['feature_dropout'] = 0.0` and `MODEL_PARAMS['dropout'] = 0.3` (keeping `weight_decay=0.0`).
-3.  **Execute Training (Exp 4)**: Ran `src/pipelineA/training/train.py` with the updated config. Best validation F1: 0.9167, Acc: 0.9167 at Epoch 37. Run ID: `dgcnn_20250405_152915`.
-4.  **Execute Evaluation (Exp 4)**: Ran `src/pipelineA/training/evaluate.py` on the best checkpoint (`model_best.pt`) from Exp 4 against Test Set 1. Results: Acc: 0.7800, Precision: 0.8205, Recall: 0.8889, F1: 0.8533, AUC: 0.8313. Slightly worse than Exp 1.
+1.  **Update Memory Bank (Post-Exp 4)**: Documented Experiment 4 results in `activeContext.md` and `progress.md`.
+2.  **Configuration Update (Exp 5)**: Modified `src/pipelineA/config.py` to set `MODEL_PARAMS['model_type'] = 'pointnet'` (keeping D=0.5, WD=0, FD=0).
+3.  **Execute Training (Exp 5 - PointNet)**: Ran `src/pipelineA/training/train.py --model pointnet`. Best validation F1: 0.8293, Acc: 0.7083 at Epoch 2. Run ID: `pointnet_20250405_155003`.
+4.  **Execute Evaluation (Exp 5 - PointNet)**: Ran `src/pipelineA/training/evaluate.py --model_type pointnet` on the best checkpoint. Results: Acc: 0.7200, Precision: 0.7200, Recall: 1.0000, F1: 0.8372, AUC: 0.4226. Poor performance.
 
 *(Previous changes retained below)*
 1.  **Memory Bank Refresh**: Read all core memory bank files to establish context.
@@ -41,9 +41,9 @@ Work has focused on implementing the new data split strategy:
 
 ## Next Steps
 
-1.  **Update Memory Bank**: Document Experiment 4 results and conclusion in `activeContext.md` (this update) and `progress.md`.
-2.  **Revert Config**: Modify `src/pipelineA/config.py` to set `MODEL_PARAMS['dropout'] = 0.5` (the best performing setting from Exp 1).
-3.  **Discuss Next Phase**: Engage with the user to decide whether to start Pipeline B, Pipeline C, or explore other improvements for Pipeline A.
+1.  **Update Memory Bank**: Document Experiment 5 results and conclusion in `activeContext.md` (this update) and `progress.md`.
+2.  **Revert Config**: Modify `src/pipelineA/config.py` to set `MODEL_PARAMS['model_type'] = 'dgcnn'` (reverting from PointNet).
+3.  **Propose Next Phase**: Ask user to choose between starting Pipeline B or Pipeline C.
 4.  **(Lower Priority)** RealSense data collection.
 
 ## Active Decisions and Considerations
@@ -54,11 +54,12 @@ Work has focused on implementing the new data split strategy:
 2.  **Regularization**:
     *   Baseline configuration used augmentation but minimal other regularization (dropout=0, WD=0, clipping=0).
     *   **Decision**: Baseline evaluation confirmed overfitting (Val Acc 0.85 vs Test Acc 0.74).
-    *   **Experiment 1 (Dropout=0.5)**: Improved Val (0.9375) and Test (0.8000) accuracy significantly, but the Val-Test gap slightly increased (0.1375). **Best result so far.**
-    *   **Experiment 2 (Dropout=0.5, WD=1e-4)**: Decreased performance compared to Exp 1 (Test Acc 0.7600). Val-Test gap remained similar (0.1358).
-    *   **Experiment 3 (Dropout=0.5, FD=0.2)**: Severely hindered learning (Test Acc 0.7200, AUC ~0.5).
-    *   **Experiment 4 (Dropout=0.3)**: Performed slightly worse than Exp 1 (Test Acc 0.7800). Val-Test gap similar (0.1367).
-    *   **Decision**: Conclude initial regularization tuning. Experiment 1 (D=0.5 only) is the best configuration for Pipeline A currently. Revert config to D=0.5. Plan next major project phase.
+    *   **Experiment 1 (DGCNN, D=0.5)**: Best result so far (Test Acc 0.8000, F1 0.8529).
+    *   **Experiment 2 (DGCNN, D=0.5, WD=1e-4)**: Worse than Exp 1.
+    *   **Experiment 3 (DGCNN, D=0.5, FD=0.2)**: Severely hindered learning.
+    *   **Experiment 4 (DGCNN, D=0.3)**: Slightly worse than Exp 1.
+    *   **Experiment 5 (PointNet, D=0.5)**: Performed poorly (Test Acc 0.7200, AUC ~0.42).
+    *   **Decision**: Conclude Pipeline A tuning/model exploration for now. DGCNN with D=0.5 is the best configuration. Revert config. Proceed to next pipeline implementation.
 
 ## Important Patterns and Preferences
 
@@ -76,4 +77,5 @@ Work has focused on implementing the new data split strategy:
 5.  **Dropout Impact**: Experiment 1 showed `dropout=0.5` significantly improves overall performance but doesn't resolve the Val-Test gap.
 6.  **Weight Decay Impact**: Experiment 2 showed `weight_decay=1e-4` was detrimental when combined with `dropout=0.5`.
 7.  **Feature Dropout Impact**: Experiment 3 showed `feature_dropout=0.2` combined with `dropout=0.5` was highly detrimental.
-8.  **Dropout Rate**: Experiment 4 showed `dropout=0.3` was slightly less effective than `dropout=0.5` (Exp 1).
+8.  **Dropout Rate**: `dropout=0.5` was more effective than `0.3` for DGCNN.
+9.  **Model Architecture**: DGCNN significantly outperformed PointNet on this task/dataset with the current setup.

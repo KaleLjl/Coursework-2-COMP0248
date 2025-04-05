@@ -66,7 +66,7 @@ POINT_CLOUD_PARAMS = {
 
 # Model parameters
 MODEL_PARAMS = {
-    "model_type": "dgcnn",  # dgcnn, pointnet, point_transformer
+    "model_type": "dgcnn",  # Reverting model type back to DGCNN
     "k": 10,                # k in kNN graph (Reduced from 20)
     "emb_dims": 512,       # Embedding dimensions (Reduced from 1024) - Keeping reduced for now
     "dropout": 0.5,         # Reverting to best dropout value from Exp 1

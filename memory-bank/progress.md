@@ -75,11 +75,18 @@ The project is in its early stages with focus primarily on Pipeline A implementa
     - **Results**: Acc: 0.7800, Precision: 0.8205, Recall: 0.8889, F1: 0.8533, AUC: 0.8313.
     - **Observation**: Performance slightly worse than Exp 1 (D=0.5). Val-Test Gap remained similar (0.1367).
 - ✅ **Analyze Experiment 4 Results**: Completed. D=0.3 is slightly less effective than D=0.5.
-- ✅ **Conclude Initial Regularization Tuning**: Experiment 1 (D=0.5 only) is the best configuration found so far.
+- ✅ **Prepare for Experiment 5 (PointNet, D=0.5)**: Completed (Modified config file).
+- ✅ **Run Experiment 5 (PointNet, D=0.5)**: Completed training run `pointnet_20250405_155003`.
+    - **Best Validation Results (Epoch 2)**: Acc: 0.7083, F1: 0.8293.
+- ✅ **Evaluate Experiment 5 on Test Set**: Completed evaluation on Test Set 1.
+    - **Results**: Acc: 0.7200, Precision: 0.7200, Recall: 1.0000, F1: 0.8372, AUC: 0.4226.
+    - **Observation**: PointNet performed poorly, likely classifying almost everything as Table (AUC ~0.42).
+- ✅ **Analyze Experiment 5 Results**: Completed. PointNet is not suitable with current setup.
+- ✅ **Conclude Pipeline A Tuning**: Experiment 1 (DGCNN, D=0.5) remains the best configuration.
 
 ### In Progress
 
-- 🔄 **Prepare for Next Phase**: Reverting config to best settings (D=0.5) and planning next steps (Pipeline B/C or other Pipeline A improvements).
+- 🔄 **Prepare for Next Phase**: Reverting config to best settings (DGCNN, D=0.5) and planning next steps (Pipeline B/C).
 
 ### Not Started
 
@@ -93,7 +100,7 @@ The project is in its early stages with focus primarily on Pipeline A implementa
 
 - ✅ **Environment Instability**: Resolved.
 - ✅ **Initial F1 Score Investigation**: No longer relevant with the new split strategy.
-- 🐞 **Confirmed Overfitting**: Baseline (Val 0.85 vs Test 0.74). Exp 1 (D=0.5) improved (Val 0.94 vs Test 0.80) but gap persisted (~0.14). Exp 2 (WD=1e-4) worsened. Exp 3 (FD=0.2) severely degraded. Exp 4 (D=0.3) slightly worse than Exp 1. Overfitting remains an issue, but further tuning of D/WD/FD seems unproductive.
+- 🐞 **Confirmed Overfitting**: Baseline (Val 0.85 vs Test 0.74). Exp 1 (DGCNN, D=0.5) improved (Val 0.94 vs Test 0.80) but gap persisted (~0.14). Other regularization (WD, FD) and model (PointNet) experiments were detrimental. Overfitting remains an issue for Pipeline A.
 - ℹ️ **Dataset Notes**:
     - Negative Samples: `mit_gym_z_squash`, `harvard_tea_2`.
     - Missing Labels: Specific frames noted in `CW2.pdf` (handled by current logic).
@@ -180,11 +187,12 @@ Previous direction: Explored more aggressive regularization techniques.
 
 Current Strategy:
 - Baseline (D=0, WD=0): Overfitting confirmed (Val 0.85 vs Test 0.74).
-- Exp 1 (D=0.5, WD=0): Improved performance (Val 0.94, Test 0.80), gap persisted (0.14). **Best so far.**
-- Exp 2 (D=0.5, WD=1e-4): Worsened test performance (Test 0.76).
-- Exp 3 (D=0.5, FD=0.2): Severely degraded performance (Test 0.72, AUC ~0.5).
-- Exp 4 (D=0.3, WD=0, FD=0): Slightly worse than Exp 1 (Test 0.78).
-- **Conclusion**: Initial regularization tuning complete. Exp 1 (D=0.5 only) is the best configuration. Revert config to D=0.5.
+- Exp 1 (DGCNN, D=0.5, WD=0): Improved performance (Val 0.94, Test 0.80), gap persisted (0.14). **Best so far.**
+- Exp 2 (DGCNN, D=0.5, WD=1e-4): Worsened test performance (Test 0.76).
+- Exp 3 (DGCNN, D=0.5, FD=0.2): Severely degraded performance (Test 0.72, AUC ~0.5).
+- Exp 4 (DGCNN, D=0.3, WD=0, FD=0): Slightly worse than Exp 1 (Test 0.78).
+- Exp 5 (PointNet, D=0.5, WD=0, FD=0): Poor performance (Test 0.72, AUC ~0.42).
+- **Conclusion**: Pipeline A tuning complete for now. Exp 1 (DGCNN, D=0.5) is the best configuration. Revert config.
 
 ### Training Strategy
 
@@ -204,7 +212,9 @@ Current Strategy:
 - **Evaluation (Exp 3)**: Test Acc: 0.7200 (Val Acc: 0.7083). Performance severely degraded.
 - **Configuration (Exp 4)**: Aug=True, D=0.3, WD=0.0, FD=0.0, Clip=0.0.
 - **Evaluation (Exp 4)**: Test Acc: 0.7800 (Val Acc: 0.9167). Slightly worse than Exp 1.
-- **Next Steps**: Revert config to Exp 1 settings (D=0.5). Plan next major phase (Pipeline B/C or other Pipeline A improvements). Continue using early stopping based on validation set performance.
+- **Configuration (Exp 5)**: Aug=True, D=0.5, WD=0.0, FD=0.0, Clip=0.0, Model=PointNet.
+- **Evaluation (Exp 5)**: Test Acc: 0.7200 (Val Acc: 0.7083). Poor performance.
+- **Next Steps**: Revert config to Exp 1 settings (DGCNN, D=0.5). Plan next major phase (Pipeline B/C). Continue using early stopping based on validation set performance.
 
 ## Milestones and Timeline
 
@@ -237,6 +247,11 @@ Current Strategy:
 | Evaluate Experiment 4 | TBD | **Complete** |
 | Analyze Experiment 4 Results | TBD | **Complete** |
 | Update Memory Bank (Post-Exp 4) | TBD | **Complete** |
+| Prepare Experiment 5 (PointNet, D=0.5) | TBD | **Complete** |
+| Run Experiment 5 | TBD | **Complete** |
+| Evaluate Experiment 5 | TBD | **Complete** |
+| Analyze Experiment 5 Results | TBD | **Complete** |
+| Update Memory Bank (Post-Exp 5) | TBD | **Complete** |
 | Prepare for Next Phase | TBD | **In Progress** |
 | Pipeline B implementation | TBD | Not Started |
 | Pipeline C implementation | TBD | Not Started |
