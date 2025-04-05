@@ -21,17 +21,28 @@ The labels grouped under a single "table" class include:
 
 The project excludes cabinets and kitchen counters from the table class.
 
-## Data Split
+### Dataset Notes (from CW2.pdf)
+- **Negative Sample Sequences** (No tables): `mit_gym_z_squash`, `harvard_tea_2`
+- **Frames with Detected Missing Labels**:
+    - `76-1studyroom2 - 0002111-000070763319.jpg`
+    - `mit_32_d507 - 0004646-000155745519.jpg`
+    - `harvard_c11 - 0000006-000000187873.jpg`
+    - `mit_lab_hj - 0001106-000044777376.jpg`
+    - `mit_lab_hj - 0001326-000053659116.jpg`
+- **Depth Format**: `harvard_tea_2` contains raw depth maps; other sequences use pre-processed DepthTSDF maps.
 
-Original assignment split:
-- **Training Data**: MIT sequences (mit_32_d507, mit_76_459, mit_76_studyroom, mit_gym_z_squash, mit_lab_hj) - 290 RGBD frames
-- **Test Data 1**: Harvard sequences (harvard_c5, harvard_c6, harvard_c11, harvard_tea_2) - 98 RGBD frames
-- **Test Data 2**: UCL sequence captured with an Intel RealSense Camera (max 50 RGBD frames)
+## Data Split Strategy
 
-Current implementation split (to address generalization issues):
-- **Training Data**: MIT sequences (mit_32_d507, mit_76_459, mit_76_studyroom, mit_gym_z_squash, mit_lab_hj) - 290 RGBD frames
-- **Validation Data**: Harvard sequences (harvard_c5, harvard_c6, harvard_c11, harvard_tea_2) - 98 RGBD frames
-- **Test Data**: Empty for now
+The coursework (`CW2.pdf`) defines the following split:
+- **Training Data**: MIT sequences (290 RGBD frames)
+- **Test Data 1**: Harvard sequences (98 RGBD frames)
+- **Test Data 2**: RealSense sequence (max 50 RGBD frames)
+
+To enable model selection and hyperparameter tuning while preserving an unseen test set, the current implementation uses the following split:
+- **Training Data**: MIT sequences (`mit_32_d507`, `mit_76_459`, `mit_76_studyroom`, `mit_gym_z_squash`, `mit_lab_hj`) - 290 frames.
+- **Validation Data**: A stratified random subset of 48 frames from the Harvard sequences. Used during training for monitoring performance and guiding decisions (e.g., early stopping, model saving).
+- **Test Data 1**: The remaining stratified random subset of 50 frames from the Harvard sequences. Used for final evaluation after training is complete.
+- **Test Data 2**: RealSense sequence (max 50 RGBD frames) - To be collected and used for final evaluation.
 
 ## Tasks
 1. **Binary Classification**: Determine if there's a table in the image
@@ -57,12 +68,24 @@ Current implementation split (to address generalization issues):
    - Results
    - Discussion
    - Conclusions
-   - References
+   - Discussion (~0.75 pages)
+   - Conclusions (~0.25 pages)
+   - References (no page limit)
 
-2. **Code**:
-   - Modular structure with separate pipeline implementations
-   - RealSense data captures
-   - Clear README documentation
+2. **Code** (Submitted as `coursework2_groupXX.zip` containing):
+   ```
+   Code/
+   ├── src/
+   │   ├── pipelineA/
+   │   ├── pipelineB/
+   │   └── pipelineC/
+   ├── data/
+   │   └── RealSense/    # Include captured data
+   ├── results/          # Predictions, logs, plots
+   ├── requirements.txt
+   └── README.md         # Explain structure and how to run
+   ```
+   - Note: `data/CW2-Dataset` and `weights/` should be deleted before submission.
 
 ## Current Progress
 Pipeline A is partially implemented, while Pipelines B and C are pending implementation.

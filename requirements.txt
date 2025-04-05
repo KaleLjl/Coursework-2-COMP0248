@@ -14,7 +14,7 @@ torchvision
 opencv-python
 pillow
 open3d
-pyrealsense2
+# pyrealsense2
 
 # Pipeline-Specific
 timm

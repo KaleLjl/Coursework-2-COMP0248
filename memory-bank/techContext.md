@@ -2,6 +2,11 @@
 
 ## Development Environment
 
+**Activation:** Always activate the Python virtual environment before running any scripts to ensure correct dependencies are used. On Linux/macOS, use:
+```bash
+source .venv/bin/activate 
+```
+
 The project is developed in a Python environment with the following requirements:
 
 ```
@@ -91,74 +96,64 @@ The project supports two main architectures for point cloud classification:
 
 ## Data Management
 
-### Dataset Organization
+### Dataset Split and Organization
 
-The data is organized into sequences from different locations:
+The data is split as follows:
+- **Training**: MIT sequences (~290 frames)
+- **Validation**: Stratified random subset of Harvard sequences (48 frames)
+- **Test Set 1**: Remaining stratified random subset of Harvard sequences (50 frames)
+- **Test Set 2**: RealSense sequence (max 50 frames, to be collected)
 
+The data is organized by location:
 ```
 data/
-├── MIT/ (Training - 290 frames)
+├── MIT/
 │   ├── mit_32_d507/
 │   ├── mit_76_459/
 │   ├── mit_76_studyroom/
-│   ├── mit_gym_z_squash/
+│   ├── mit_gym_z_squash/ # Negative samples
 │   └── mit_lab_hj/
-├── Harvard/ (Validation - 98 frames)
+├── Harvard/
 │   ├── harvard_c5/
 │   ├── harvard_c6/
 │   ├── harvard_c11/
-│   └── harvard_tea_2/
-└── RealSense/ (Future Test Data)
+│   └── harvard_tea_2/    # Negative samples, raw depth
+└── RealSense/
     └── [custom captured data]
 ```
+Validation and Test Set 1 frames are drawn from the Harvard sequences based on pre-generated frame lists (`validation_frames.pkl`, `test_frames.pkl`).
 
-Note: This represents the current implementation which uses MIT sequences (larger dataset) for training and Harvard sequences (smaller dataset) for validation to better measure generalization performance.
-
-Each sequence contains:
-- Depth maps (.png or .npy)
-- RGB images (.jpg or .png)
-- Polygon annotations (format varies)
-
-**Important Label Format Difference**:
-- The harvard_tea_2 dataset only has the "depth" label format
-- Other datasets have the "depthTSDF" label format
-- This requires special handling in the data loading pipeline to ensure consistent processing
+### Data Characteristics and Notes
+- **Depth Format**: `harvard_tea_2` uses raw depth (likely mm), others use processed DepthTSDF (likely meters). Handled in `dataset.py`.
+- **Negative Samples**: `mit_gym_z_squash` and `harvard_tea_2` contain no tables.
+- **Missing Labels**: Specific frames in `76-1studyroom2`, `mit_32_d507`, `harvard_c11`, `mit_lab_hj` are noted in `CW2.pdf` as potentially missing table labels. This is handled by the current label loading logic (frames without labels are treated as negative).
 
 ### Data Loading Pipeline
 
+The `TableDataset` class in `dataset.py` handles loading:
+- It accepts a `data_spec` argument:
+    - For training: A dictionary mapping sequence names to sub-sequences (`TRAIN_SEQUENCES` from `config.py`).
+    - For validation/testing: A list of specific frame identifiers (`VALIDATION_FRAMES` or `TEST_FRAMES` loaded from pickle files in `config.py`).
+- It scans the relevant sequences based on `data_spec`.
+- It loads depth, (optionally) RGB, intrinsics, and label data (`tabletop_labels.dat`).
+- It determines the binary label (0/1) based on the presence of table polygons.
+- If `data_spec` is a list, it filters the loaded samples to include only those matching the specified frame identifiers.
+- It converts depth to point clouds and applies preprocessing/augmentation.
+
 ```mermaid
 graph TD
-    A[Sequence Directory] --> B[Dataset Class]
-    B --> C{Split Type?}
-    
-    C -->|Training| D[MIT Sequences]
-    C -->|Validation| E[Harvard Sequences]
-    
-    D --> F{Data Type?}
-    F -->|Depth| G[Load Depth Map]
-    F -->|RGB| H[Load RGB Image]
-    F -->|Labels| I[Load Annotations]
-    
-    E --> J{Data Type?}
-    J -->|Depth| K[Load Depth Map]
-    J -->|RGB| L[Load RGB Image]
-    J -->|Labels| M[Load Annotations]
-    
-    G --> N[Convert to Point Cloud]
-    H --> O[Process RGB]
-    I --> P[Generate Ground Truth]
-    
-    K --> Q[Convert to Point Cloud]
-    L --> R[Process RGB]
-    M --> S[Generate Ground Truth]
-    
-    N --> T[Training Point Cloud Dataset]
-    O --> U[Training RGB Dataset]
-    P --> V[Training Label Dataset]
-    
-    Q --> W[Validation Point Cloud Dataset]
-    R --> X[Validation RGB Dataset]
-    S --> Y[Validation Label Dataset]
+    subgraph Data Loading
+        direction LR
+        DSpec[Data Specification (Dict or List)] --> DC[Dataset Class (TableDataset)]
+        DC --> Scan[Scan Relevant Sequences]
+        Scan --> Load[Load Frames (Depth, RGB, Labels, Intrinsics)]
+        Load --> Filter{Filter by Frame List?}
+        Filter -- Yes --> SamplesValTest[Filtered Samples (Val/Test)]
+        Filter -- No --> SamplesTrain[All Scanned Samples (Train)]
+        SamplesTrain --> Process[Process Sample (PC Gen, Preproc, Aug)]
+        SamplesValTest --> Process
+        Process --> Output[Loader Output (Points, Label, Metadata)]
+    end
 ```
 
 ## Configuration System

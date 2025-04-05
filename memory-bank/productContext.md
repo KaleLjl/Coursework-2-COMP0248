@@ -52,10 +52,12 @@ From a user perspective, the ideal solution should:
 
 The project operates within these constraints:
 
-1. **Limited Dataset Size**: 
-   - Original assignment: 290 MIT frames for training, 98 Harvard frames for testing
-   - Current implementation: 290 MIT frames for training, 98 Harvard frames for validation (to address generalization issues)
-   - Using the larger dataset for training while testing generalization on a different dataset distribution
+1. **Limited Dataset Size**:
+   - Training: MIT sequences (290 frames)
+   - Validation: Stratified random subset of Harvard sequences (48 frames)
+   - Test Set 1: Remaining stratified random subset of Harvard sequences (50 frames)
+   - Test Set 2: RealSense sequence (max 50 frames, to be collected)
+   - This split allows for validation during training while maintaining an unseen test set (Test Set 1).
 2. **Academic Context**: Focusing on methodology and evaluation rather than production-ready implementation
 3. **Specific Table Definition**: Only certain furniture types (table top, dining table, desk, coffee table) are considered tables
 4. **Fixed Evaluation Framework**: Must adhere to the coursework evaluation metrics and reporting format

@@ -7,12 +7,22 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
+import os
+import sys
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+from datetime import datetime
+from pathlib import Path
+from torch.utils.tensorboard import SummaryWriter
 import argparse
+import sys # Added for verification exit
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import (
-    BASE_DATA_DIR, TRAIN_SEQUENCES, TEST1_SEQUENCES, # TEST1_SEQUENCES are now VAL_SEQUENCES
+    BASE_DATA_DIR, TRAIN_SEQUENCES, VALIDATION_FRAMES, TEST_FRAMES, # Use new frame lists
     POINT_CLOUD_PARAMS, MODEL_PARAMS, TRAIN_PARAMS, AUGMENTATION_PARAMS,
     WEIGHTS_DIR, RESULTS_DIR, LOGS_DIR
 )
@@ -251,16 +261,16 @@ def main(args):
     print(f"Using device: {device}")
     
     # Create data loaders
+    # Updated to use new data_spec arguments and pass individual params
     train_loader, val_loader, test_loader = create_data_loaders(
         data_root=BASE_DATA_DIR,
-        train_sequences=TRAIN_SEQUENCES, # Use MIT sequences for training
-        val_sequences=TEST1_SEQUENCES,   # Use Harvard sequences for validation
-        test_sequences=None,             # No test set defined for now
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        point_cloud_params=POINT_CLOUD_PARAMS,
-        augmentation_params=AUGMENTATION_PARAMS if args.augment else None
-        # train_val_split is removed as we now use separate sequence dicts
+        train_spec=TRAIN_SEQUENCES,
+        val_spec=VALIDATION_FRAMES,
+        test_spec=TEST_FRAMES,
+        batch_size=args.batch_size,         # Pass individual args
+        num_workers=args.num_workers,       # Pass individual args
+        point_cloud_params=POINT_CLOUD_PARAMS, # Pass config params
+        augmentation_params=AUGMENTATION_PARAMS if args.augment else None # Pass config params conditionally
     )
     
     print(f"Train samples: {len(train_loader.dataset)}")
@@ -312,8 +322,8 @@ def main(args):
     checkpoint_dir = os.path.join(
         WEIGHTS_DIR, f"{args.model_type}_{timestamp}")
     log_dir = os.path.join(
-        LOGS_DIR, f"{args.model_type}_{timestamp}")
-    
+        LOGS_DIR, f"{args.exp_name if args.exp_name else f'{args.model_type}_{timestamp}'}") # Use exp_name if provided
+
     # Train model
     model, train_losses, val_losses, train_metrics, val_metrics = train_model(
         model=model,
@@ -364,7 +374,7 @@ if __name__ == "__main__":
     # Removed emb_dims and dropout as they are now loaded from config.py
     
     # Training parameters
-    parser.add_argument("--num_epochs", type=int, default=TRAIN_PARAMS.get('num_epochs', 100), # Default from config
+    parser.add_argument("--num_epochs", type=int, default=TRAIN_PARAMS.get('num_epochs', 50), # Default from config
                         help="Number of epochs")
     parser.add_argument("--batch_size", type=int, default=TRAIN_PARAMS.get('batch_size', 16), # Default from config
                         help="Batch size")
@@ -383,6 +393,8 @@ if __name__ == "__main__":
                         help="Random seed")
     parser.add_argument("--device", type=str, default="cuda",
                         help="Device to use")
-    
+    parser.add_argument("--exp_name", type=str, default=None,
+                        help="Optional name for the experiment run")
+
     args = parser.parse_args()
     main(args)

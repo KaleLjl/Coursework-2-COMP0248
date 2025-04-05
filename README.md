@@ -112,7 +112,7 @@ python src/pipelineA/training/train.py --model_type dgcnn --augment
 
 **Key Command-Line Training Arguments:**
 - `--model_type`: Model architecture (`dgcnn` or `pointnet`). Default: `dgcnn`.
-- `--num_epochs`: Number of training epochs. Default: From `config.py` (e.g., 100).
+- `--num_epochs`: Number of training epochs. Default: From `config.py` (e.g., 50).
 - `--batch_size`: Batch size for training. Default: From `config.py` (e.g., 16).
 - `--learning_rate`: Initial learning rate. Default: From `config.py` (e.g., 0.001).
 - `--augment`: Flag to enable data augmentation (defined in `config.py`).

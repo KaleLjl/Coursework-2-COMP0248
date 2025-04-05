@@ -10,8 +10,8 @@ import matplotlib.pyplot as plt
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import (
-    BASE_DATA_DIR, TEST1_SEQUENCES, TEST2_SEQUENCES,
-    POINT_CLOUD_PARAMS, MODEL_PARAMS, WEIGHTS_DIR, RESULTS_DIR
+    BASE_DATA_DIR, TEST_FRAMES, VALIDATION_FRAMES, REAL_SENSE_SEQUENCES, # Corrected import name
+    POINT_CLOUD_PARAMS, MODEL_PARAMS, WEIGHTS_DIR, RESULTS_DIR # Added MODEL_PARAMS
 )
 from models.classifier import get_model
 from models.utils import (
@@ -230,11 +230,12 @@ def main(args):
     
     # Create model
     model = get_model(
-        model_type=args.model_type,
+        model_type=args.model_type, # From CLI args
         num_classes=2,
-        k=args.k,
-        emb_dims=args.emb_dims,
-        dropout=0.0  # No dropout for evaluation
+        k=args.k,                   # From CLI args
+        emb_dims=MODEL_PARAMS['emb_dims'], # Use config value
+        dropout=MODEL_PARAMS['dropout'],   # Use config value (model.eval() handles disabling)
+        feature_dropout=MODEL_PARAMS.get('feature_dropout', 0.0) # Use config value
     )
     
     # Move model to device
@@ -249,25 +250,43 @@ def main(args):
     # Define loss function
     criterion = nn.CrossEntropyLoss()
     
-    # Create test dataset
-    if args.test_set == 1:
-        test_sequences = TEST1_SEQUENCES  # Harvard sequences
-    elif args.test_set == 2:
-        test_sequences = TEST2_SEQUENCES  # RealSense sequences
-    else:
-        raise ValueError(f"Invalid test set: {args.test_set}")
-    
+    # Create test dataset loader
     from torch.utils.data import DataLoader
-    from data_processing.dataset import collate_fn
-    
-    test_dataset = TableDataset(
-        data_root=BASE_DATA_DIR,
-        sequences=test_sequences,
-        augment=False,
-        mode='test',
-        point_cloud_params=POINT_CLOUD_PARAMS
-    )
-    
+    from data_processing.dataset import collate_fn # Assuming collate_fn is defined here or imported
+
+    if args.test_set == 1:
+        # Use TEST_FRAMES list for Harvard test set
+        if not TEST_FRAMES:
+             print("Warning: TEST_FRAMES list is empty in config. Cannot evaluate Test Set 1.")
+             return # Or handle appropriately
+        print(f"Evaluating on Test Set 1 (Harvard subset) using {len(TEST_FRAMES)} frame IDs.")
+        test_dataset = TableDataset(
+            data_root=BASE_DATA_DIR,
+            data_spec=TEST_FRAMES, # Pass the list of frame IDs
+            augment=False,
+            mode='test',
+            point_cloud_params=POINT_CLOUD_PARAMS
+        )
+    elif args.test_set == 2:
+        # Use REAL_SENSE_SEQUENCES dictionary for RealSense test set
+        if not REAL_SENSE_SEQUENCES: # Use correct variable name
+             print("Warning: REAL_SENSE_SEQUENCES is empty in config. Cannot evaluate Test Set 2.")
+             return # Or handle appropriately
+        print(f"Evaluating on Test Set 2 (RealSense) using sequences: {list(REAL_SENSE_SEQUENCES.keys())}") # Use correct variable name
+        test_dataset = TableDataset(
+            data_root=BASE_DATA_DIR,
+            sequences=REAL_SENSE_SEQUENCES, # Use correct variable name
+            augment=False,
+            mode='test',
+            point_cloud_params=POINT_CLOUD_PARAMS
+        )
+    else:
+        raise ValueError(f"Invalid test set specified: {args.test_set}. Choose 1 (Harvard) or 2 (RealSense).")
+
+    if len(test_dataset) == 0:
+        print(f"Error: Test dataset for Test Set {args.test_set} is empty. Cannot evaluate.")
+        return
+
     test_loader = DataLoader(
         test_dataset,
         batch_size=args.batch_size,
@@ -337,10 +356,9 @@ if __name__ == "__main__":
     parser.add_argument("--model_type", type=str, default="dgcnn",
                         choices=["dgcnn", "pointnet"],
                         help="Model type")
-    parser.add_argument("--k", type=int, default=20,
+    parser.add_argument("--k", type=int, default=MODEL_PARAMS.get('k', 20), # Default from config
                         help="Number of nearest neighbors for DGCNN")
-    parser.add_argument("--emb_dims", type=int, default=1024,
-                        help="Embedding dimensions")
+    # Removed emb_dims argument, will be loaded from config
     
     # Evaluation parameters
     parser.add_argument("--checkpoint", type=str, required=True,

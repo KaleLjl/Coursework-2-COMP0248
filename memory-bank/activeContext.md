@@ -2,152 +2,53 @@
 
 ## Current Focus
 
-The primary focus is now on **investigating the cause of the high, initially flat validation F1 score** (observed around 0.83 in early epochs). The leading hypothesis is that this score reflects the model initially predicting the majority class ("no table") in an imbalanced Harvard validation set.
-
-Key areas:
-1.  **Validation Set Analysis**: Confirming the class imbalance in the Harvard dataset.
-2.  **Code Review**: Examining evaluation logic (`evaluate.py`), training loop (`train.py`), and model initialization (`classifier.py`) for factors contributing to this initial behavior.
-3.  **Training with Optimal Diagnostic Config**: Once the initial score behavior is understood, the plan remains to run a full training session using the 'augmentation only' configuration (augmentation enabled, dropout=0.0, weight_decay=0.0, gradient_clip=0.0) identified as promising in diagnostics.
-4.  **Performance Evaluation**: Analyzing the results of the 'augmentation only' run, monitoring for overfitting, and comparing against the initial baseline behavior.
+The primary focus is on establishing a reliable baseline for Pipeline A using the new stratified data split. This involves:
+1.  **Code Consistency**: Ensuring training, evaluation, and configuration scripts are aligned (e.g., recent alignment of `evaluate.py` model instantiation).
+2.  **Baseline Training Run**: Executing an initial training run (`train.py`) using the new data split and baseline configuration to establish performance benchmarks.
+3.  **Initial Evaluation**: Preparing for the first evaluation run on the held-out test set (`evaluate.py`) after the baseline training completes.
 
 ## Recent Changes
 
-Recent work has focused on implementing the strategy to address overfitting:
+Work has focused on implementing the new data split strategy:
 
-1.  **Label Format Handling Confirmed**: Reviewed `dataset.py` and confirmed existing logic correctly handles the "depth" vs "depthTSDF" format difference for `harvard_tea_2`. No code changes were needed for this specific item.
-
-2.  **New Dataset Split Strategy Implemented**:
-    *   Modified `dataset.py`: Updated `create_data_loaders` to accept separate `train_sequences` and `val_sequences` arguments, removing the old `train_val_split` logic.
-    *   Modified `train.py`: Updated the call to `create_data_loaders` to pass `TRAIN_SEQUENCES` (MIT) as training data and `TEST1_SEQUENCES` (Harvard) as validation data.
-
-3.  **Enhanced Model Regularization Implemented**:
-    *   Modified `classifier.py`: Added `feature_dropout` parameter to `DGCNN` constructor and applied dropout after EdgeConv layers during training. Updated `get_model` to accept this parameter.
-    *   Confirmed `config.py`: Verified that `MODEL_PARAMS` already contained `emb_dims` and `feature_dropout` parameters.
-
-4.  **Advanced Data Augmentation Implemented**:
-    *   Modified `preprocessing.py`: Added `point_dropout` and `random_subsample` functions. Integrated these into the `augment_point_cloud` function and updated the call within `preprocess_point_cloud`.
-
-5.  **Training Process Enhancements Implemented**:
-    *   Modified `train.py`:
-        *   Updated model instantiation to use regularization parameters (`emb_dims`, `dropout`, `feature_dropout`) from `config.py`.
-        *   Updated optimizer and scheduler instantiation to use parameters (`weight_decay`, `lr_scheduler_factor`, `lr_scheduler_patience`) from `config.py`.
-        *   Implemented gradient clipping in `train_epoch` using `TRAIN_PARAMS['gradient_clip']`.
-        *   Simplified command-line arguments, removing those now sourced from `config.py`.
-6.  **Depth Warning Debugging & `harvard_tea_2` Handling**:
-    *   Identified "No valid depth values" warnings during training, specifically for `harvard_tea_2` sequence.
-    *   Enhanced logging in `depth_to_pointcloud.py` to print full paths and raw depth statistics.
-    *   Confirmed the issue was caused by the `max_depth` threshold (10.0m) being too low for the millimeter-based raw depth values in `harvard_tea_2` after conversion to meters.
-    *   Fixed by increasing `POINT_CLOUD_PARAMS['max_depth']` to `20.0` in `config.py`.
-    *   Corrected an `IndentationError` introduced during debugging in `depth_to_pointcloud.py`.
-    *   Confirmed `dataset.py` uses a `use_raw_depth` flag to correctly select the `depth` directory (vs `depthTSDF`) and pass this flag to `create_pointcloud_from_depth` for appropriate scaling (likely mm to m conversion).
-7.  **Validation Data Shuffling**:
-    *   Modified `dataset.py`: Updated `create_data_loaders` to set `shuffle=True` for the `val_loader` as requested.
+1.  **Decision**: Agreed to split the Harvard dataset (98 frames) into a validation set (48 frames) and a test set (50 frames) using stratified random sampling to maintain class balance while preserving an unseen test set.
+2.  **Label Extraction**: Created and executed `scripts/extract_harvard_labels.py` to determine the binary (Table/No Table) label for each Harvard frame, saving the results to `scripts/harvard_frame_labels.pkl`. Resolved initial Python environment issues (`torch` not found) by ensuring the correct environment was activated.
+3.  **Data Splitting**: Created and executed `scripts/split_harvard_data.py` to load the extracted labels and perform the stratified 48/50 split, saving the resulting validation and test frame identifier lists to `scripts/validation_frames.pkl` and `scripts/test_frames.pkl`.
+4.  **Configuration Update**: Modified `src/pipelineA/config.py` to load the `VALIDATION_FRAMES` and `TEST_FRAMES` lists from the generated pickle files, replacing the previous hardcoded `TEST1_SEQUENCES`.
+5.  **Dataset Loading Update**: Modified `src/pipelineA/data_processing/dataset.py`:
+    *   Updated `TableDataset.__init__` to accept a `data_spec` (dict for sequences or list for frame IDs).
+    *   Updated `TableDataset._load_and_filter_samples` to load all potential samples from relevant sequences and then filter based on `data_spec` (using frame IDs for validation/test lists).
+    *   Updated `create_data_loaders` to use the new `data_spec` argument and load data specifications (MIT sequences, validation frame list, test frame list) from the updated `config.py`.
+6.  **Memory Bank Update (Partial)**: Updated `projectbrief.md`, `productContext.md`, `systemPatterns.md`, and `techContext.md` to reflect the new data split strategy and incorporate dataset notes/deliverable requirements from `CW2.pdf`.
+7.  **Evaluation Script Alignment**: Modified `src/pipelineA/training/evaluate.py` to instantiate the model using `emb_dims` and `feature_dropout` parameters loaded from `MODEL_PARAMS` in `config.py`, ensuring consistency with the training script. Removed the redundant `--emb_dims` command-line argument.
 
 ## Next Steps
 
-Priority is now investigating the initial high validation score:
-
-1.  **Update Memory Bank**: Document recent changes, resolved environment issue, validation score investigation priority, and updated plan. (In Progress).
-2.  **Calculate Validation Set Distribution**: Implement logic (potentially a temporary script or modification in `dataset.py`) to count the number of "table" vs "no table" samples in the Harvard validation set loaded by `val_dataset`.
-3.  **Review Evaluation Logic (`evaluate.py`)**: Check metric calculations (Precision, Recall, F1) for correctness, especially regarding averaging methods (`binary`, `micro`, `macro`, `weighted`) and handling of zero divisions in the context of potential imbalance.
-4.  **Review Training Logic (`train.py`)**: Confirm `model.eval()` is correctly used before validation. Check loss function setup.
-5.  **Review Model Initialization (`classifier.py`)**: Briefly check weight initialization.
-6.  **Set 'Augmentation Only' Configuration**: Once the initial score behavior is understood, ensure `config.py` reflects:
-    *   `MODEL_PARAMS['dropout'] = 0.0`
-    *   `MODEL_PARAMS['feature_dropout'] = 0.0`
-    *   `TRAIN_PARAMS['weight_decay'] = 0.0`
-    *   `TRAIN_PARAMS['gradient_clip'] = 0.0`
-    *   `AUGMENTATION_PARAMS['enabled'] = True`
-    *   `TRAIN_PARAMS['num_epochs'] = 100` # Or adjust based on findings
-7.  **Run Training**: Execute `train.py` with the 'augmentation only' configuration.
-8.  **Analyze Performance**: Monitor logs, evaluate peak performance, check for overfitting, compare against initial behavior.
-9.  **Iterate (If Needed)**: If performance is good but overfitting occurs, consider reintroducing mild regularization.
-10. **Memory Bank Update**: Update `progress.md` with investigation findings and training results.
+1.  **Finalize Memory Bank**: Update `progress.md` to reflect the completed data split implementation, `evaluate.py` alignment, and the current project status.
+2.  **Verify Data Loaders**: (Already marked as complete in `progress.md`, but good to keep in mind if issues arise). Confirm `create_data_loaders` correctly loads expected sample counts.
+3.  **Run Baseline Training**: Execute `src/pipelineA/training/train.py` using the current configuration (DGCNN, Augmentation=True, Dropout=0, WD=0) to establish baseline performance with the new data split. Monitor training/validation metrics.
+4.  **Evaluate Baseline on Test Set**: After the baseline training run completes, use the *now aligned* `src/pipelineA/training/evaluate.py` to evaluate the final trained model on the held-out test set (Harvard-Subset2, Test Set 1).
+5.  **Analyze Baseline Results**: Review the baseline performance (train/val/test metrics), check for overfitting/underfitting.
+6.  **Plan Further Experiments**: Based on baseline results, decide on next steps for Pipeline A (e.g., hyperparameter tuning, reintroducing regularization) or begin work on Pipeline B/C or RealSense data collection.
 
 ## Active Decisions and Considerations
 
-Key decisions currently being made:
-
-1. **Dataset Split Strategy**:
-   - Decided to use MIT sequences (~290 frames) for training, Harvard sequences (~98 frames) for validation
-   - This addresses the weak validation signal from the previous approach and should better measure generalization
-   - Using the larger dataset for training should help with model learning
-
-2. **Model Architecture Strategy**: 
-   - Confirmed that the model has too much capacity relative to the dataset size
-   - Need to properly balance model complexity for the training dataset
-   - Focus on techniques that improve generalization to the Harvard validation set
-
-3. **Advanced Regularization Techniques**:
-   - Dropout should be increased beyond standard values (0.5 → 0.7)
-   - Weight decay needs to be more aggressive (1e-4 → 5e-4)
-   - Feature-level dropout and gradient clipping should be implemented
-   - Regularization is key to ensuring the model doesn't overfit the MIT training set
-
-4. **Testing and Evaluation Focus**:
-   - Harvard validation set will now be the primary indicator of generalization performance
-   - Need to establish new baselines with this dataset configuration
-   - Implementing more robust monitoring of training/validation divergence will be critical
+1.  **Dataset Split Strategy**:
+    *   **Decision**: Implement MIT=Train (290), Harvard-Subset1=Validation (48), Harvard-Subset2=Test1 (50) using stratified random sampling.
+    *   **Rationale**: Provides a mechanism for monitoring generalization and guiding training (validation set) while maintaining a truly unseen test set for final evaluation, addressing methodological concerns of the previous approach.
+2.  **Regularization**:
+    *   Current configuration uses augmentation but minimal other regularization (dropout=0, WD=0, clipping=0) based on previous diagnostic tests.
+    *   This needs re-evaluation after the baseline run with the new data split, as overfitting behavior might change.
 
 ## Important Patterns and Preferences
 
-1. **Regularization Strategy**: 
-   - Confirmed GroupNorm and LayerNorm are good choices for varying batch sizes
-   - Multiple dropout strategies should be combined: standard dropout, feature dropout, and input dropout
-   - Weight decay should be aggressively tuned based on validation performance
-
-2. **Data Augmentation Best Practices**:
-   - Point cloud augmentation needs to be more aggressive than initially implemented
-   - Combining multiple augmentation types is critical: rotation, jitter, scaling, point dropout
-   - Random subsampling during training can help prevent overfitting to specific point densities
-
-3. **Training Protocol**:
-   - Continue using TensorBoard for visualizing metrics
-   - Add new metrics focusing specifically on overfitting detection
-   - Maintain early stopping based on validation F1-score
-
-4. **Model Selection Strategy**:
-   - DGCNN remains the primary architecture but with enhanced regularization
-   - PointNet should be evaluated as a potentially more generalizable alternative
-   - Consider ensemble methods only after optimizing individual models
+1.  **Data Handling**: Prefer loading specific data splits (train/val/test) based on configuration rather than performing splits dynamically within the training script. Use helper scripts for one-off data processing tasks like label extraction and splitting.
+2.  **Configuration**: Centralize dataset specifications (sequences, frame lists) and hyperparameters in `config.py`.
+3.  **Testing**: Maintain a clear separation between the validation set (used during development) and the test set (used only for final evaluation).
+4.  **Script Consistency**: Maintain consistency between training and evaluation scripts, especially regarding model architecture instantiation, by referencing shared configuration files (`config.py`) where possible.
 
 ## Learnings and Project Insights
 
-Key insights gained from investigating the overfitting issue:
-
-1. **Dataset Structure Understanding**:
-   - The train/validation split strategy is critical - previous random frame-level splitting from MIT sequences did not adequately test generalization
-   - MIT sequences and Harvard sequences likely have distribution differences that make cross-dataset generalization challenging
-   - Using MIT sequences (larger dataset) for training and Harvard sequences (smaller dataset) for validation provides a better approach
-   - The model needs to learn from more diverse examples before being tested on a different dataset
-
-2. **Model Architecture Insights**:
-   - DGCNN's edge convolution operations can easily overfit to training set patterns
-   - The embedding dimension (1024) is likely too large for the dataset size
-   - Regularization needs to be applied at multiple levels: weights, features, and input data
-   - Need to find model architectures that generalize well from MIT to Harvard data
-
-3. **Training Dynamics Observations**:
-   - The divergence between training and validation performance begins after ~20-30 epochs
-   - There is indeed a critical early phase where generalization is learned before memorization
-   - Learning rate scheduling and early stopping are important but insufficient alone
-   - With the revised dataset split, we expect to see new training dynamics that will need careful monitoring
-
-4. **Generalization Challenges**:
-   - Point cloud data presents unique generalization challenges compared to images.
-   - Domain-specific augmentations are crucial for improving generalization.
-   - Sequence-specific patterns may be learned instead of general table characteristics.
-   - The true test of generalization will now be performance on the Harvard validation sequences.
-5. **Flat Validation Metrics Diagnosis**:
-   - Diagnostic tests confirmed that the high dropout rates (`dropout=0.7`, `feature_dropout=0.2`) used previously were the primary cause of the flat validation metrics.
-   - Configurations without dropout, even with augmentation and other regularization (weight decay, gradient clipping), showed dynamic validation performance.
-   - This indicates the model was overly constrained by the high dropout, preventing effective learning on the validation set distribution.
-6. **Baseline Run Insights & Diagnostic Summary**:
-   - Diagnostic tests isolated high dropout (`0.7`/`0.2`) as the cause of flat validation metrics.
-   - A diagnostic run with only augmentation enabled achieved the highest peak F1 (0.9306) compared to runs with weight decay/clipping enabled (peak F1=0.8333).
-   - This suggests the best path forward is to start with the minimal 'augmentation only' configuration and potentially add back *mild* regularization later if overfitting becomes an issue.
-7. **Initial F1 Score Insight**:
-   - The consistent starting validation F1 score of 0.8333 (with accuracy 0.7143) strongly suggests the model initially defaults to predicting the majority class ("no table"), and 0.8333 is the F1 score for that majority class given the likely 71.4% prevalence in the validation set.
-   - The unused `mixup_alpha` parameter remains a potential tool if needed later.
-8. **Environment Stability**: The previous `ModuleNotFoundError` was confirmed by the user to be related to environment activation and is considered resolved.
-9. **Validation Data Loading**: The validation loader now shuffles data (`shuffle=True` in `dataset.py`), matching the training loader behavior. This might slightly change epoch-to-epoch validation scores compared to non-shuffled evaluation, but the overall trend should be similar.
+1.  **Test Set Integrity**: Reaffirmed the importance of having a truly unseen test set for unbiased evaluation. Using validation data for final testing leads to inflated results.
+2.  **Data Splitting**: Stratified sampling is crucial when splitting smaller datasets to ensure class distributions are preserved across subsets, especially for classification tasks.
+3.  **Code Modularity**: Refactoring `dataset.py` to handle different types of data specifications (sequence dicts vs frame lists) improves flexibility.

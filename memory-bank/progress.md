@@ -30,45 +30,44 @@ The project is in its early stages with focus primarily on Pipeline A implementa
 - ✅ Metric computation and visualization
 
 ### What Works (Continued)
-- ✅ **New Dataset Split Strategy**: Implemented MIT sequences for training, Harvard sequences for validation (`dataset.py`, `train.py`).
-- ✅ **Enhanced Regularization**: Implemented feature-level dropout in DGCNN (`classifier.py`), gradient clipping (`train.py`), and confirmed config parameters (`config.py`).
-- ✅ **Advanced Data Augmentation**: Implemented point dropout and random subsampling (`preprocessing.py`) and confirmed config parameters (`config.py`).
-- ✅ **Training Script Updates**: Aligned `train.py` with new dataset split, regularization, augmentation, and configuration loading.
-- ✅ **Label Format Handling**: Confirmed existing logic in `dataset.py` handles `harvard_tea_2` format.
-- ✅ **Depth Warning Resolution**: Identified cause of "No valid depth values" warning (low `max_depth` for `harvard_tea_2`) and fixed by increasing `max_depth` in `config.py`. Corrected related `IndentationError`.
-- ✅ **Validation Data Shuffling**: Updated `dataset.py` to shuffle validation data (`shuffle=True`) as requested.
+- ✅ **Stratified Data Split Implementation**:
+    - ✅ Extracted labels for Harvard frames (`scripts/extract_harvard_labels.py`).
+    - ✅ Performed stratified 48/50 split for validation/test sets (`scripts/split_harvard_data.py`).
+    - ✅ Updated `config.py` to load validation/test frame lists from pickle files.
+    - ✅ Updated `dataset.py` (`TableDataset`, `create_data_loaders`) to handle loading based on frame lists for validation/test.
+- ✅ **Enhanced Regularization**: Implemented feature-level dropout, gradient clipping (though currently disabled in config).
+- ✅ **Advanced Data Augmentation**: Implemented point dropout, random subsampling (currently enabled in config).
+- ✅ **Label Format Handling**: Confirmed logic handles `harvard_tea_2` raw depth format.
+- ✅ **Depth Warning Resolution**: Resolved `max_depth` issue for `harvard_tea_2`.
+- ✅ **Validation Data Shuffling**: `val_loader` uses `shuffle=True`.
+- ✅ **Evaluation Script Alignment**: `evaluate.py` now correctly instantiates models using parameters (`emb_dims`, `feature_dropout`) from `config.py`, ensuring consistency with `train.py`.
+- ✅ **Run Baseline Training**: Completed initial run with DGCNN, Augmentation=True, Dropout=0, WD=0.
 
 ### In Progress
 
-- 🔄 **Investigate Initial Validation Score**: Analyzing why the validation F1 score starts high (~0.83) and stays flat initially. Hypothesis: Model predicts majority class in imbalanced Harvard set.
-    -   Calculating validation set class distribution.
-    -   Reviewing evaluation logic (`evaluate.py`).
-    -   Reviewing training loop (`train.py`).
-    -   Reviewing model initialization (`classifier.py`).
-- 🔄 **Prepare 'Augmentation Only' Run**: Preparing configuration (`config.py`) for the run (dropout=0.0, WD=0.0, clip=0.0, augment=True).
+- 🔄 **Evaluate Baseline on Test Set**: Running the *aligned* `evaluate.py` on the held-out test set (Harvard-Subset2, Test Set 1).
 
 ### Not Started
 
-- ❌ Calculating exact validation set class distribution.
-- ❌ Reviewing `evaluate.py`, `train.py`, `classifier.py` for initial score behavior.
-- ❌ Running full training experiment with the 'augmentation only' configuration.
-- ❌ Thorough evaluation and analysis of the 'augmentation only' results.
-- ❌ Re-introducing mild regularization (e.g., small weight decay or dropout) if overfitting occurs in the 'augmentation only' run.
-- ❌ Implementing mixup augmentation (if needed).
-- ❌ Performance comparison with baseline/previous attempts.
-- ❌ Integration of optimal model into final pipeline.
-- ❌ Implementation of detailed train/validation divergence monitoring.
+- ✅ **Verify Data Loaders**: Confirmed `create_data_loaders` loads correct sample counts (Train: 281, Val: 48, Test: 50).
+- ❌ **Analyze Baseline Results**: Review performance, overfitting, etc., after evaluation.
+- ❌ **Plan Further Experiments**: Decide next steps for Pipeline A or other pipelines based on baseline results.
+- ❌ **Pipeline B Implementation**
+- ❌ **Pipeline C Implementation**
+- ❌ **RealSense Data Collection & Evaluation**
+- ❌ **Report Writing**
 
 ### Known Issues
 
-- ✅ **Environment Instability**: Resolved (Confirmed by user as activation issue).
-- 🐞 **Potential Overfitting**: The 'augmentation only' configuration (minimal regularization) might be prone to overfitting later in training. Needs monitoring.
-- 🐞 **Initial F1 Score**: High starting F1 (~0.83) likely reflects model predicting the majority class in an imbalanced validation set. Investigation ongoing.
-- 🐞 Handling of invalid depth values needs improvement (lower priority).
-- 🐞 Point cloud sampling strategy ('random') may need optimization (lower priority).
-- 🐞 Need to address missing table labels in some frames (lower priority).
-- 🐞 Potential class imbalance in Harvard validation set (likely ~71.4% majority class based on initial metrics). Investigation ongoing.
-- ℹ️ Validation data is now shuffled, which may slightly alter epoch-to-epoch scores compared to previous non-shuffled runs.
+- ✅ **Environment Instability**: Resolved.
+- ✅ **Initial F1 Score Investigation**: No longer relevant with the new split strategy.
+- 🐞 **Potential Overfitting**: Baseline run needed to assess overfitting with the new split, as the current config uses minimal regularization (dropout=0, WD=0).
+- ℹ️ **Dataset Notes**:
+    - Negative Samples: `mit_gym_z_squash`, `harvard_tea_2`.
+    - Missing Labels: Specific frames noted in `CW2.pdf` (handled by current logic).
+    - Depth Format: `harvard_tea_2` uses raw depth.
+- 🐞 Handling of invalid depth values during point cloud generation could be more robust (lower priority).
+- 🐞 Point cloud sampling strategy ('random') might need optimization (lower priority).
 
 ## Pipeline B: RGB to Depth to Classification
 
@@ -105,7 +104,7 @@ Planned activities:
 - ✅ README with project overview
 - ✅ Setup instructions
 - ✅ Memory bank initialization
-- 🔄 Memory bank updates for current challenges
+- ✅ Memory bank updates (Reflecting data split and evaluate.py alignment)
 - ❌ Report draft
 
 ### Experiment Tracking
@@ -119,16 +118,15 @@ Planned activities:
 
 ### Dataset Split Strategy
 
-Initial approach: Use MIT sequences for training with random 80/20 split for validation, and Harvard sequences for testing.
+Initial approach: MIT sequences for training, random 80/20 split within MIT for validation, Harvard for testing. *Issue: Weak validation signal.*
 
-Previous issue: Validation data was too similar to training data, not providing a strong generalization signal.
+Intermediate approach: MIT for training, full Harvard set for validation. *Issue: Test set not unseen, potentially inflated validation metrics.*
 
-Current strategy:
-- Using MIT sequences (~290 frames) for training (larger dataset)
-- Using Harvard sequences (~98 frames) for validation (smaller dataset)
-- Test dataset to remain empty for now
-- This approach provides a much stronger test of generalization
-- Uses the larger dataset for training while ensuring validation tests generalization to a different data distribution
+Current strategy (Implemented):
+- **Training**: MIT sequences (290 frames).
+- **Validation**: Stratified random subset of Harvard sequences (48 frames).
+- **Test Set 1**: Remaining stratified random subset of Harvard sequences (50 frames).
+- **Rationale**: Provides validation data for monitoring/tuning during training while preserving a truly unseen test set (Test Set 1) for final evaluation. Addresses methodological concerns and aligns better with standard practices.
 
 ### Model Architecture
 
@@ -137,53 +135,46 @@ Initial decision: Use DGCNN as primary architecture due to its strong performanc
 Previous evaluation: DGCNN shows strong capacity to learn training data but may be prone to overfitting.
 
 Current direction:
-- Confirmed that DGCNN's high capacity is contributing to overfitting with our limited dataset
-- Implementing stronger regularization (dropout 0.5 → 0.7, weight decay 1e-4 → 5e-4)
-- Adding feature-level dropout (0.2) to prevent co-adaptation
-- Planning to test reduced embedding dimensions (1024 → 512)
-- Will compare against PointNet for generalization performance
+- DGCNN selected as initial architecture.
+- Baseline run will use minimal regularization to establish performance.
+- Based on baseline results, previously explored aggressive regularization techniques (dropout 0.7, WD 5e-4, feature dropout 0.2, gradient clipping) may be reintroduced or tuned if overfitting is observed.
+- Reduced embedding dimensions (1024 -> 512) and comparison with PointNet remain options for future experiments if needed.
 
 ### Regularization Strategy
 
-Initial approach: Standard dropout (0.5) and normalization techniques (GroupNorm, LayerNorm).
+Initial approach: Standard dropout (0.5) and normalization.
 
-Previous direction: Exploring more aggressive regularization.
+Previous direction: Explored more aggressive regularization techniques.
 
-Current implementation:
-- Increased dropout to 0.7 in the configuration
-- Added feature-level dropout concept (0.2)
-- Increased weight decay to 5e-4
-- Added gradient clipping parameter (1.0)
-- Enhanced data augmentation (wider rotation ranges, increased jitter, point dropout)
+Current Strategy:
+- Baseline run will use minimal regularization (dropout=0, WD=0, clipping=0) but keep augmentation enabled.
+- If baseline shows overfitting on the new validation set, the previously implemented techniques (increased dropout, feature dropout, increased weight decay, gradient clipping, enhanced augmentation) will be selectively re-enabled and tuned.
 
 ### Training Strategy
 
-Initial approach: Standard training with early stopping based on validation F1-score.
+Initial approach: Standard training with early stopping based on validation F1.
 
-Previous direction: Enhanced monitoring, aggressive regularization/augmentation to combat overfitting, leading to flat validation metrics.
-
-Diagnosis Result: High dropout rates (`0.7` standard, `0.2` feature) were identified as the cause of flat validation metrics.
+Previous direction: Focused on diagnosing flat validation metrics caused by high dropout when using the full Harvard set for validation.
 
 Current Strategy:
-- Dataset Split: MIT (train), Harvard (validation).
-- **Priority:** Investigate the high initial validation F1 score (imbalance hypothesis).
-- Configuration (Post-Investigation): Use 'augmentation only' settings identified in diagnostics (Augmentation=True, Dropout=0.0, WD=0.0, Clip=0.0).
-- **Next Steps:** Calculate validation distribution, review relevant code (`evaluate.py`, `train.py`, `classifier.py`), then run the 'augmentation only' config, analyze results (especially for overfitting), and potentially reintroduce mild regularization if needed.
+- **Dataset Split**: Using the new MIT=Train, Harvard-Subset1=Val, Harvard-Subset2=Test split.
+- **Configuration**: Baseline run will use config with Augmentation=True, Dropout=0.0, WD=0.0, Clip=0.0.
+- **Next Steps**: Verify data loaders, run baseline training, evaluate on the test set (Harvard-Subset2), analyze results. Based on analysis, decide on further tuning (e.g., reintroducing regularization if overfitting occurs). Early stopping based on the new validation set (Harvard-Subset1) performance will be used.
 
 ## Milestones and Timeline
 
 | Milestone | Target Date | Status |
 |-----------|-------------|--------|
-| Pipeline A implementation | TBD | 75% Complete |
-| Address overfitting in Pipeline A | TBD | Implemented anti-overfitting measures |
-| Diagnose Flat Validation Metrics | TBD | **Complete** |
-| Identify Optimal Diagnostic Configuration | TBD | **Complete** ('Augmentation Only') |
-| Resolve Environment Issues | TBD | **Complete** |
-| Investigate Initial High Validation Score | TBD | **In Progress** |
-| Train and Evaluate 'Augmentation Only' Config | TBD | **Pending** (Blocked by Investigation) |
-| Achieve Improved Validation Performance | TBD | Pending Training Run |
+| Implement Stratified Val/Test Split | TBD | **Complete** |
+| Update Memory Bank for New Split | TBD | **Complete** |
+| Verify Data Loaders | TBD | **Complete** |
+| Align `evaluate.py` Model Instantiation | TBD | **Complete** |
+| Update Memory Bank (Post-Alignment) | TBD | **Complete** |
+| Run Baseline Training (Pipeline A) | TBD | **Complete** |
+| Evaluate Baseline on Test Set (Pipeline A) | TBD | **In Progress** |
+| Analyze Baseline Results (Pipeline A) | TBD | Pending |
 | Pipeline B implementation | TBD | Not Started |
 | Pipeline C implementation | TBD | Not Started |
-| RealSense data collection | TBD | Not Started |
+| RealSense data collection & Eval | TBD | Not Started |
 | Report draft | TBD | Not Started |
 | Final submission | TBD | Not Started |

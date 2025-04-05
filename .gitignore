@@ -4,3 +4,4 @@ weights/
 environment/
 __pycache__/
 logs/
+.venv

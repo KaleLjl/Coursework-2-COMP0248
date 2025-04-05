@@ -43,9 +43,9 @@ graph TD
 
 1. **Data Processing**:
    - `depth_to_pointcloud.py`: Converts depth maps to 3D point clouds
-   - `dataset.py`: Handles data loading and preprocessing
+   - `dataset.py`: Handles data loading and preprocessing (using sequence dict for train, frame lists for val/test)
    - `preprocessing.py`: Contains point cloud preprocessing functions
-   - Data split is now restructured: MIT sequences for training, Harvard sequences for validation
+   - Data split: MIT=Train, Harvard-Subset1=Validation, Harvard-Subset2=Test1
 
 2. **Models**:
    - `classifier.py`: Implements neural network architectures for point cloud classification
@@ -53,12 +53,12 @@ graph TD
 
 3. **Training**:
    - `train.py`: Handles model training and validation
-   - `evaluate.py`: Evaluates model performance on validation data
-   - Training now uses MIT sequences with strong regularization
+   - `evaluate.py`: Evaluates model performance on validation or test data. Now aligned to use model parameters (`emb_dims`, `feature_dropout`) from `config.py` for instantiation, ensuring consistency with training.
+   - Training uses MIT sequences, validation uses Harvard-Subset1
 
 4. **Configuration**:
-   - `config.py`: Centralizes configuration parameters
-   - Contains dataset split configuration and regularization parameters
+   - `config.py`: Centralizes configuration parameters (including model architecture details like `emb_dims`, `dropout`, `feature_dropout`). Used by both `train.py` and `evaluate.py` for model instantiation.
+   - Loads validation/test frame lists from pickle files
 
 ### Data Flow
 
@@ -79,11 +79,22 @@ graph LR
     PCH --> SH[Sampling/Normalization]
     SH --> AH[Augmentation]
     AH --> MH[Model Input]
-    MH --> V[Validation]
+    MH --> V[Validation During Training]
     end
-    
+
+    subgraph "Testing Pipeline"
+    DT[Harvard Test Subset Depth Maps] --> PT[Preprocessing]
+    PT --> PCT[Point Cloud Generation]
+    PCT --> ST[Sampling/Normalization]
+    ST --> MT[Model Input]
+    MT --> TE[Testing]
+    end
+
     T --> M[Trained Model]
-    V --> E[Evaluation Metrics]
+    V --> EM_V[Validation Metrics]
+    M --> TE
+    TE --> EM_T[Test Metrics]
+
 ```
 
 ### Key Interfaces
@@ -94,11 +105,13 @@ graph LR
    class PointCloudDataset(Dataset):
        def __init__(self, data_path, split, transform=None)
        def __getitem__(self, idx)
+       def __init__(self, data_root, data_spec, transform=None, augment=False, mode='train', ...)
+       def __getitem__(self, idx)
        def __len__()
    ```
    
-   The split parameter now determines whether to load MIT data (for training) 
-   or Harvard data (for validation).
+   The `data_spec` parameter now determines whether to load MIT sequences (dict for training) 
+   or specific Harvard frame lists (list for validation/test).
 
 2. **Model Interface**:
    ```python
@@ -108,17 +121,17 @@ graph LR
        def forward(self, x)
    ```
    
-   The model now includes enhanced regularization techniques to ensure generalization to the Harvard validation set.
+   The model architecture (e.g., DGCNN, PointNet) and its parameters (`k`, `emb_dims`, `dropout`, `feature_dropout`) are defined based on `config.py` and command-line arguments in both training and evaluation scripts.
 
 3. **Training Interface**:
    ```python
    # Training interface
    def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, args)
-   def evaluate(model, validation_loader, criterion, args)
+   def evaluate(model, data_loader, criterion, args) # Can take val_loader or test_loader
    ```
    
-   The training process now uses MIT sequences for training and Harvard sequences for validation,
-   with regularization parameters tuned for better generalization to the validation set.
+   The training process uses MIT sequences (train_loader) and Harvard-Subset1 (val_loader).
+   Final evaluation uses Harvard-Subset2 (test_loader).
 
 ## Pipeline B: RGB to Depth to Classification
 
@@ -163,13 +176,15 @@ graph LR
 
 ## Cross-Cutting Concerns
 
-1. **Configuration Management**: Centralized in `config.py` with command-line overrides
+1. **Configuration Management**: Centralized in `config.py` (defining data paths, model parameters, training settings) with command-line overrides for key parameters like `model_type` and `k`. Referenced by both training and evaluation scripts for consistency.
 2. **Logging**: TensorBoard for training metrics, matplotlib for visualizations
 3. **Error Handling**: Robust handling of invalid depths, empty point clouds
 4. **Performance Monitoring**: Tracking of inference time, memory usage
 5. **Evaluation Framework**: Consistent metrics across pipelines for fair comparison
-6. **Dataset Split Management**: 
-   - MIT sequences used for training (larger dataset, ~290 frames)
-   - Harvard sequences used for validation (smaller dataset, ~98 frames)
-   - Strong regularization to ensure generalization to validation set
-   - Monitoring of generalization performance across datasets
+6. **Dataset Split Management**:
+   - Training: MIT sequences (~290 frames)
+   - Validation: Stratified random subset of Harvard sequences (48 frames)
+   - Test Set 1: Remaining stratified random subset of Harvard sequences (50 frames)
+   - Test Set 2: RealSense sequence (max 50 frames, to be collected)
+   - Validation set used during training for monitoring and model selection.
+   - Test Set 1 used for final, unbiased performance evaluation.
