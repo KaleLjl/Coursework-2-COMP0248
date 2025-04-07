@@ -8,8 +8,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 try:
+    # Import TableDataset and BASE_DATA_DIR, but not TEST1_SEQUENCES
     from src.pipelineA.data_processing.dataset import TableDataset
-    from src.pipelineA.config import BASE_DATA_DIR, TEST1_SEQUENCES
+    from src.pipelineA.config import BASE_DATA_DIR
 except ImportError as e:
     print(f"Error importing project modules: {e}")
     print("Please ensure the script is run from the project root directory or the PYTHONPATH is set correctly.")
@@ -17,20 +18,31 @@ except ImportError as e:
 
 def extract_labels():
     """
-    Instantiates the TableDataset for the Harvard sequences and extracts
-    frame identifiers and their binary labels.
+    Instantiates the TableDataset for the Harvard sequences (excluding harvard_tea_2)
+    and extracts frame identifiers and their binary labels.
     """
-    print(f"Loading Harvard sequences from: {BASE_DATA_DIR}")
-    print(f"Sequences to process: {TEST1_SEQUENCES}")
+    # Define the Harvard sequences to be used for validation/testing explicitly here
+    # Excludes harvard_tea_2 which is now part of the training set
+    HARVARD_VAL_TEST_SEQUENCES = {
+        "harvard_c5": ["hv_c5_1"],
+        "harvard_c6": ["hv_c6_1"],
+        "harvard_c11": ["hv_c11_2"]
+        # "harvard_tea_2": ["hv_tea2_2"] # Excluded
+    }
+
+    print(f"Loading Harvard sequences (for Val/Test split) from: {BASE_DATA_DIR}")
+    print(f"Sequences to process: {HARVARD_VAL_TEST_SEQUENCES}")
 
     try:
         # Instantiate dataset - mode doesn't matter here, augment=False
         # Pass minimal point cloud params to avoid unnecessary processing if possible
         minimal_pc_params = {"num_points": 10} # We don't need the points, just the labels
-        
+
+        # Use the locally defined HARVARD_VAL_TEST_SEQUENCES
+        # The TableDataset constructor expects 'data_spec' argument now
         harvard_dataset = TableDataset(
             data_root=BASE_DATA_DIR,
-            sequences=TEST1_SEQUENCES,
+            data_spec=HARVARD_VAL_TEST_SEQUENCES, # Pass the correct dict here
             augment=False,
             mode='test', # Mode doesn't affect label loading
             point_cloud_params=minimal_pc_params, # Use minimal params

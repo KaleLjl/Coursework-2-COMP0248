@@ -2,7 +2,9 @@
 
 ## Overall Architecture
 
-The project follows a modular architecture with three distinct pipelines, each representing a different approach to table detection:
+*(Scope revised to focus solely on Pipeline A)*
+
+The project implements Pipeline A, following a modular architecture:
 
 ```mermaid
 graph TD
@@ -11,23 +13,11 @@ graph TD
         A2 --> A3[Point Cloud Classification]
         A3 --> A4[Table/No Table]
     end
-    
-    subgraph "Pipeline B"
-        B1[RGB Image] --> B2[Depth Estimation]
-        B2 --> B3[Depth Classification]
-        B3 --> B4[Table/No Table]
-    end
-    
-    subgraph "Pipeline C"
-        C1[Depth Image] --> C2[Point Cloud Conversion]
-        C2 --> C3[Point Cloud Segmentation]
-        C3 --> C4[Pointwise Table/Background]
-    end
 ```
 
-## Common Design Patterns
+## Common Design Patterns (Applied to Pipeline A)
 
-1. **Pipeline Pattern**: Each solution follows a sequential processing pipeline where the output of one component serves as input to the next.
+1. **Pipeline Pattern**: Pipeline A follows a sequential processing pipeline where the output of one component serves as input to the next.
 
 2. **Factory Pattern**: Model creation is abstracted through factory methods that instantiate the appropriate model architecture based on configuration parameters.
 
@@ -45,7 +35,7 @@ graph TD
    - `depth_to_pointcloud.py`: Converts depth maps to 3D point clouds
    - `dataset.py`: Handles data loading and preprocessing. Now supports multiple `data_spec` formats: sequence dict (train), frame lists (val/test1), and custom dataset config dict (e.g., for 'ucl' dataset, loading labels from text file).
    - `preprocessing.py`: Contains point cloud preprocessing functions
-   - Data split: MIT=Train, Harvard-Subset1=Validation, Harvard-Subset2=Test1, UCL=Test2.
+   - **Data split (Under Review 2025-04-07)**: Original split (MIT=Train, Harvard=Val/Test pool) yielded best balanced results. Domain adaptation split (MIT+`harvard_tea_2`=Train) yielded poor results, possibly due to class imbalance. Final split TBD pending investigation.
 
 2. **Models**:
    - `classifier.py`: Implements neural network architectures for point cloud classification
@@ -137,61 +127,18 @@ graph LR
    def evaluate(model, data_loader, criterion, args) # Can take val_loader or test_loader
    ```
    
-   The training process uses MIT sequences (train_loader) and Harvard-Subset1 (val_loader).
-   Final evaluation uses the test set specified by `EVAL_TEST_SET` in `config.py` (1: Harvard-Subset2, 2: UCL).
+   The training process used either MIT sequences (original split) or MIT + `harvard_tea_2` (domain adaptation split). Validation used the corresponding Harvard subset.
+   Final evaluation uses the test set specified by `EVAL_TEST_SET` in `config.py` (1: Corresponding Harvard-Subset2, 2: UCL).
 
-## Pipeline B: RGB to Depth to Classification
-
-### Components
-
-1. **Depth Estimation**: Model to convert RGB images to depth maps
-2. **Classification**: Model to classify depth maps for table detection
-3. **Data Processing**: Utilities for RGB processing and depth estimation
-4. **Training/Evaluation**: Scripts for training and evaluation
-
-### Data Flow
-
-```mermaid
-graph LR
-    RGB[RGB Image] --> P[Preprocessing]
-    P --> DE[Depth Estimation]
-    DE --> DP[Depth Preprocessing]
-    DP --> C[Classification]
-    C --> O[Output: Table/No Table]
-```
-
-## Pipeline C: Depth to Point Cloud Segmentation
-
-### Components
-
-1. **Point Cloud Generation**: Convert depth maps to point clouds
-2. **Segmentation Model**: Classify each point as table or background
-3. **Evaluation**: Metrics and visualization for point cloud segmentation
-
-### Data Flow
-
-```mermaid
-graph LR
-    D[Depth Map] --> P[Preprocessing]
-    P --> PC[Point Cloud Generation]
-    PC --> S[Sampling/Normalization]
-    S --> A[Augmentation]
-    A --> M[Model Input]
-    M --> SG[Segmentation]
-    SG --> O[Output: Per-point Table/Background]
-```
-
-## Cross-Cutting Concerns
+## Cross-Cutting Concerns (Relevant to Pipeline A)
 
 1. **Configuration Management**: Fully centralized in `config.py`. All scripts (`train.py`, `evaluate.py`, `visualize_test_predictions.py`, `dataset.py`) read their parameters directly from this file. No command-line arguments are used.
 2. **Logging**: TensorBoard for training metrics, matplotlib for visualizations
 3. **Error Handling**: Robust handling of invalid depths, empty point clouds
 4. **Performance Monitoring**: Tracking of inference time, memory usage
-5. **Evaluation Framework**: Consistent metrics across pipelines for fair comparison
-6. **Dataset Split Management**:
-   - Training: MIT sequences (~290 frames).
-   - Validation: Stratified random subset of Harvard sequences (48 frames).
-   - Test Set 1: Remaining stratified random subset of Harvard sequences (50 frames).
-   - Test Set 2: Custom 'ucl' dataset (RealSense capture, defined in `UCL_DATA_CONFIG` in `config.py`).
-   - Validation set used during training for monitoring and model selection.
-   - Test Sets 1 or 2 used for final evaluation via `evaluate.py` (controlled by `EVAL_TEST_SET` in `config.py`).
+5. **Evaluation Framework**: Consistent metrics for evaluating Pipeline A's performance.
+6. **Dataset Split Management (Under Review 2025-04-07)**:
+   - **Original Split**: Training: MIT (~290). Validation: Harvard-Subset1 (48). Test Set 1: Harvard-Subset2 (50).
+   - **Domain Adaptation Split**: Training: MIT + `harvard_tea_2` (~305). Validation: Harvard-Subset1 excl. `harvard_tea_2` (24). Test Set 1: Harvard-Subset2 excl. `harvard_tea_2` (50).
+   - **Test Set 2 (Consistent)**: Custom 'ucl' dataset (RealSense capture, raw depth).
+   - **Status**: Final split TBD pending class balance investigation of the Domain Adaptation training set. Original split currently has best results.

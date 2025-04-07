@@ -2,19 +2,47 @@
 
 ## Current Focus
 
-The project has just completed fixing an `ImportError` that arose after the test set consolidation cleanup.
+*(Scope revised to focus solely on Pipeline A)*
 
-The next focus is to determine the subsequent task (e.g., Pipeline B/C implementation, report writing).
+The investigation into potential class imbalance in the mixed training set (MIT + `harvard_tea_2`) used for the domain adaptation run (`dgcnn_20250407_171414`) is complete. The analysis revealed the dataset was **well-balanced** (47.5% Class 0, 52.5% Class 1).
+
+Therefore, class imbalance was not the cause of the poor evaluation results (prediction bias, low AUC) of that model. The domain adaptation attempt by simply mixing data failed.
+
+**Final Decision**: Revert to the previous best model (`dgcnn_20250407_142213`, trained only on MIT data) and the original data split (MIT=Train, Harvard-Subset1=Val(48), Harvard-Subset2=Test1(50)).
+
+The current focus is to restore the project state to this configuration and prepare for report writing.
 
 ## Recent Changes
 
-1.  **Fix ImportError Post-Cleanup**: Removed the import of `REAL_SENSE_SEQUENCES` from `evaluate.py` and `visualize_test_predictions.py` after it was deleted from `config.py` during the test set consolidation, resolving the `ImportError`. Updated Memory Bank.
-2.  **Consolidate Test Sets (Cleanup)**: Modified `config.py`, `evaluate.py`, and `visualize_test_predictions.py` to remove the unused `REAL_SENSE_SEQUENCES` definition and designate the UCL dataset (using `UCL_DATA_CONFIG`) as Test Set 2. Updated relevant comments and logic. Updated Memory Bank files accordingly.
-3.  **Initiate Cleanup Phase**: Shifted focus from new pipeline development to project cleanup.
-2.  **Remove CLI Args (`train.py`)**: Modified `src/pipelineA/training/train.py` to remove `argparse` and source all parameters from `config.py`. (Used `write_to_file` fallback).
-3.  **Remove CLI Args (`evaluate.py`)**: Modified `src/pipelineA/training/evaluate.py` to remove `argparse` and source all parameters from `config.py`.
-4.  **Remove CLI Args (`visualize_test_predictions.py`)**: Modified `src/pipelineA/visualize_test_predictions.py` to remove `argparse` and source all parameters from `config.py`.
-5.  **Update `config.py`**: Added necessary top-level configuration variables (e.g., `SEED`, `DEVICE`, `NUM_WORKERS`, `AUGMENT`, `EXP_NAME`) and consolidated evaluation/visualization parameters (e.g., `EVAL_CHECKPOINT`, `EVAL_TEST_SET`, `VIS_OUTPUT_DIR`) previously handled by CLI or defaults. Renamed default evaluation parameters for clarity.
+1.  **Identify Domain Shift**: Analyzed overfitting results and identified the difference between DepthTSDF (training) and raw depth (`harvard_tea_2`, `ucl` test) as a likely cause for poor generalization.
+2.  **Modify Training Set**: Moved `harvard_tea_2` (raw depth) sequence to the training set to expose the model to both data domains. Updated `src/pipelineA/config.py`.
+3.  **Update Data Split Scripts**:
+    *   Modified `scripts/extract_harvard_labels.py` to exclude `harvard_tea_2` from the pool used for validation/test splitting.
+    *   Confirmed `scripts/split_harvard_data.py` handles variable input sizes correctly.
+4.  **Regenerate Data Splits**:
+    *   Executed `scripts/extract_harvard_labels.py` to create labels for the remaining 74 Harvard frames.
+    *   Executed `scripts/split_harvard_data.py` to create new validation (24 frames) and test (50 frames) sets from the reduced Harvard pool, saving `validation_frames.pkl` and `test_frames.pkl`.
+5.  **Execute Training (Domain Adaptation Attempt)**: Ran `src/pipelineA/training/train.py` using the best configuration (DGCNN, D=0.5) on the new mixed training set (MIT + `harvard_tea_2`). Run ID: `dgcnn_20250407_171414`. Best validation F1 (0.9787) achieved at Epoch 1.
+6.  **Evaluate Domain Adaptation Model**: Evaluated model `dgcnn_20250407_171414` on the updated Test Set 1 (50 Harvard frames excl. `harvard_tea_2`). Results: Acc: 0.9400, Precision: 0.9400, Recall: 1.0000, F1: 0.9691, AUC: 0.2553.
+7.  **Analyze & Decide (Tentative)**: Tentatively concluded that the domain adaptation attempt failed due to prediction bias. Decision to revert was on hold.
+8.  **Analyze Training Set Class Balance**: Created and executed `scripts/analyze_training_set_balance.py` for the mixed training set (MIT + `harvard_tea_2`). Found the set to be well-balanced (47.5% Class 0, 52.5% Class 1).
+9.  **Final Decision**: Confirmed domain adaptation attempt failed for reasons other than class imbalance. **Final decision made to revert** to the previous best model (`dgcnn_20250407_142213`) and the original data split.
+
+*(Previous changes retained below)*
+1.  **Overfitting Analysis Execution**:
+    *   Confirmed configuration (`EVAL_CHECKPOINT`, set `EVAL_TEST_SET=1`).
+    *   Executed `evaluate.py` and `visualize_test_predictions.py` on Test Set 1 (Harvard-Subset2).
+    *   Temporarily modified `config.py` to load validation frames.
+    *   Executed `evaluate.py` and `visualize_test_predictions.py` on Validation Set (Harvard-Subset1).
+    *   Reverted `config.py`.
+    *   Summarized comparison results (see Learnings/Insights).
+be2.  **Fix ImportError Post-Cleanup**: Removed the import of `REAL_SENSE_SEQUENCES` from `evaluate.py` and `visualize_test_predictions.py` after it was deleted from `config.py` during the test set consolidation, resolving the `ImportError`. Updated Memory Bank.
+3.  **Consolidate Test Sets (Cleanup)**: Modified `config.py`, `evaluate.py`, and `visualize_test_predictions.py` to remove the unused `REAL_SENSE_SEQUENCES` definition and designate the UCL dataset (using `UCL_DATA_CONFIG`) as Test Set 2. Updated relevant comments and logic. Updated Memory Bank files accordingly.
+4.  **Initiate Cleanup Phase**: Shifted focus from new pipeline development to project cleanup.
+5.  **Remove CLI Args (`train.py`)**: Modified `src/pipelineA/training/train.py` to remove `argparse` and source all parameters from `config.py`. (Used `write_to_file` fallback).
+6.  **Remove CLI Args (`evaluate.py`)**: Modified `src/pipelineA/training/evaluate.py` to remove `argparse` and source all parameters from `config.py`.
+7.  **Remove CLI Args (`visualize_test_predictions.py`)**: Modified `src/pipelineA/visualize_test_predictions.py` to remove `argparse` and source all parameters from `config.py`.
+8.  **Update `config.py`**: Added necessary top-level configuration variables (e.g., `SEED`, `DEVICE`, `NUM_WORKERS`, `AUGMENT`, `EXP_NAME`) and consolidated evaluation/visualization parameters (e.g., `EVAL_CHECKPOINT`, `EVAL_TEST_SET`, `VIS_OUTPUT_DIR`) previously handled by CLI or defaults. Renamed default evaluation parameters for clarity.
 
 *(Previous changes retained below)*
 1.  **Update Memory Bank (Post-Exp 5)**: Documented Experiment 5 results and the conclusion.
@@ -64,22 +92,31 @@ Work has focused on implementing the new data split strategy:
 
 ## Next Steps
 
-1.  **Determine Next Task**: Ask user for the next step (e.g., Pipeline B/C implementation, report writing).
+*(Scope revised to focus solely on Pipeline A)*
+
+1.  **Revert Configuration**: Update `config.py` to point `EVAL_CHECKPOINT` back to `dgcnn_20250407_142213/model_best.pt` and ensure `TRAIN_SEQUENCES` only contains MIT sequences.
+2.  **Restore Original Data Splits**: Restore the original `validation_frames.pkl` and `test_frames.pkl` (containing 48 and 50 frames respectively, from the full Harvard pool). *Requires finding backups or re-running original split scripts.*
+3.  **Update Memory Bank**: Ensure all memory bank files reflect the final reverted state (original data split, final model choice). (Partially done, progress.md remaining).
+4.  **Proceed to Report Writing**: Document the final chosen model (`dgcnn_20250407_142213`), its performance on the original Test Set 1, the investigation into domain shift (including the failed mitigation attempt), and the reasons for reverting.
 
 ## Active Decisions and Considerations
 
-1.  **Dataset Split Strategy**:
-    *   **Decision**: Implement MIT=Train (290), Harvard-Subset1=Validation (48), Harvard-Subset2=Test1 (50) using stratified random sampling.
-    *   **Rationale**: Provides a mechanism for monitoring generalization and guiding training (validation set) while maintaining a truly unseen test set for final evaluation, addressing methodological concerns of the previous approach.
-2.  **Regularization**:
+1.  **Dataset Split Strategy (Final)**:
+    *   **Final Decision**: Use the original split: MIT=Train (290), Harvard-Subset1=Validation (48), Harvard-Subset2=Test1 (50).
+    *   **Rationale**: The attempt to mitigate domain shift failed. The original split allows for evaluating generalization from MIT to Harvard, which is likely the coursework intent.
+2.  **Final Model Selection**:
+    *   **Final Decision**: Use model checkpoint `dgcnn_20250407_174719` (DGCNN, D=0.5, trained on MIT only - re-run of Exp 1) as the final model for Pipeline A.
+    *   **Rationale**: This represents the definitive run of the best configuration identified (Exp 1). Confirmed evaluation results (Acc: 0.72, F1: 0.80, AUC: 0.73) show moderate performance but highlight the domain shift limitation (F1=0.0 on `harvard_tea_2`).
+3.  **Regularization**:
     *   Baseline configuration used augmentation but minimal other regularization (dropout=0, WD=0, clipping=0).
     *   **Decision**: Baseline evaluation confirmed overfitting (Val Acc 0.85 vs Test Acc 0.74).
-    *   **Experiment 1 (DGCNN, D=0.5)**: Best result so far (Test Acc 0.8000, F1 0.8529).
+    *   **Experiment 1 (DGCNN, D=0.5)**: Identified as best configuration. Re-run (`dgcnn_20250407_174719`) yielded definitive results (Test Acc: 0.72, F1: 0.80).
     *   **Experiment 2 (DGCNN, D=0.5, WD=1e-4)**: Worse than Exp 1.
     *   **Experiment 3 (DGCNN, D=0.5, FD=0.2)**: Severely hindered learning.
     *   **Experiment 4 (DGCNN, D=0.3)**: Slightly worse than Exp 1.
-    *   **Experiment 5 (PointNet, D=0.5)**: Performed poorly (Test Acc 0.7200, AUC ~0.42).
-    *   **Decision**: Conclude Pipeline A tuning/model exploration for now. DGCNN with D=0.5 is the best configuration. Revert config. Proceed to next pipeline implementation.
+    *   **Experiment 5 (PointNet, D=0.5)**: Performed poorly.
+    *   **Decision**: Confirmed DGCNN with D=0.5 as the best configuration among those tested.
+    *   **Domain Adaptation Training**: Executed training run `dgcnn_20250407_171414` on mixed data. Evaluation showed poor generalization. Class balance analysis ruled out imbalance as the primary cause. Attempt abandoned.
 
 ## Important Patterns and Preferences
 
@@ -102,3 +139,10 @@ Work has focused on implementing the new data split strategy:
 7.  **Feature Dropout Impact**: Experiment 3 showed `feature_dropout=0.2` combined with `dropout=0.5` was highly detrimental.
 8.  **Dropout Rate**: `dropout=0.5` was more effective than `0.3` for DGCNN.
 9.  **Model Architecture**: DGCNN significantly outperformed PointNet on this task/dataset with the current setup.
+10. **Overfitting Analysis (Val vs Test1)**: Completed analysis using checkpoint `dgcnn_20250407_142213/model_best.pt`. Key findings:
+    *   Confirmed performance drop (Acc: 0.875 -> 0.800, F1: 0.914 -> 0.865).
+    *   Significant drop in AUC-ROC (0.939 -> 0.794), indicating poorer class discrimination on unseen data.
+    *   Recall drop (0.941 -> 0.889) suggests more tables are missed on the test set.
+    *   Model struggles with negative samples (`harvard_tea_2`), yielding F1=0.0 on both sets. This sequence is now part of the training data.
+    *   Qualitative review of visualizations is needed for deeper insight into error types.
+11. **Domain Shift Impact**: The difference between DepthTSDF and raw depth is confirmed as a significant factor affecting generalization. The attempt to mitigate this by training on mixed data failed. This will be a key point for discussion in the final report.

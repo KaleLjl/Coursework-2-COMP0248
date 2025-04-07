@@ -1,11 +1,11 @@
 # Project Brief: Table Detection from 3D Point Clouds
 
 ## Project Overview
-This project implements three different pipelines for detecting tables in 3D point clouds derived from RGBD images:
+This project implements a pipeline for detecting tables in 3D point clouds derived from RGBD images:
 
 1. **Pipeline A**: Convert a depth input to a point cloud, then use a classifier to determine if there's a table in the scene.
-2. **Pipeline B**: First estimate depth from a 2D RGB image, then use a classifier on the estimated depth map.
-3. **Pipeline C**: Convert a depth input to point cloud, then use a segmentation model to classify each point as table or background.
+
+*(Note: The scope has been reduced to focus solely on Pipeline A).*
 
 ## Dataset
 The project uses selected data from Sun 3D dataset, which includes:
@@ -38,15 +38,21 @@ The coursework (`CW2.pdf`) defines the following split:
 - **Test Data 1**: Harvard sequences (98 RGBD frames)
 - **Test Data 2**: RealSense sequence (max 50 RGBD frames)
 
-To enable model selection and hyperparameter tuning while preserving an unseen test set, the current implementation uses the following split:
-- **Training Data**: MIT sequences (`mit_32_d507`, `mit_76_459`, `mit_76_studyroom`, `mit_gym_z_squash`, `mit_lab_hj`) - 290 frames.
-- **Validation Data**: A stratified random subset of 48 frames from the Harvard sequences. Used during training for monitoring performance and guiding decisions (e.g., early stopping, model saving).
-- **Test Data 1**: The remaining stratified random subset of 50 frames from the Harvard sequences. Used for final evaluation after training is complete.
-- **Test Data 2**: Custom 'ucl' dataset (RealSense capture) - Used for final evaluation (defined by `UCL_DATA_CONFIG` in `config.py`).
+To enable model selection and hyperparameter tuning while preserving an unseen test set, the following splits have been used:
+- **Original Split (Used for Exp 1 - Best Balanced Results So Far)**:
+    - Training: MIT sequences (~290 frames).
+    - Validation: Stratified random subset of Harvard sequences (48 frames).
+    - Test Set 1: Remaining stratified random subset of Harvard sequences (50 frames).
+- **Domain Adaptation Split (Used for Run `dgcnn_20250407_171414`)**:
+    - Training: MIT sequences **plus** `harvard_tea_2` (~305 frames).
+    - Validation: Stratified random subset of remaining Harvard sequences (24 frames).
+    - Test Set 1: Remaining stratified random subset of Harvard sequences (50 frames).
+- **Test Set 2 (Consistent Across Splits)**: Custom 'ucl' dataset (RealSense capture, raw depth) - Used for final evaluation (defined by `UCL_DATA_CONFIG` in `config.py`).
+
+**Current Status (2025-04-07)**: The Domain Adaptation Split led to poor evaluation results (prediction bias). The final split strategy is **under review**, pending investigation into class imbalance in the mixed training set. The Original Split currently represents the configuration with the best achieved evaluation metrics.
 
 ## Tasks
-1. **Binary Classification**: Determine if there's a table in the image
-2. **Binary Point Cloud Segmentation**: Classify each point as Table or Background
+1. **Binary Classification**: Determine if there's a table in the image using Pipeline A.
 
 ## Implementation Requirements
 - Models can be re-used/imported from existing sources, but must be cited
@@ -55,16 +61,14 @@ To enable model selection and hyperparameter tuning while preserving an unseen t
 - Classification/Segmentation models can use pre-trained models as initialization but must be trained on the coursework dataset
 
 ## Evaluation
-- Quantitative evaluation for classification/depth estimation
-- Qualitative evaluation for segmentation
-- Comparison of performance between pipelines
-- Identification of strengths and weaknesses
+- Quantitative evaluation for classification performance of Pipeline A.
+- Identification of strengths and weaknesses of Pipeline A.
 
 ## Deliverables
 1. **Report** (maximum 6 pages + references):
    - Introduction / Problem Statement
    - Data processing
-   - Methods (Pipelines A, B, C)
+   - Method (Pipeline A)
    - Results
    - Discussion
    - Conclusions
@@ -76,16 +80,14 @@ To enable model selection and hyperparameter tuning while preserving an unseen t
    ```
    Code/
    ├── src/
-   │   ├── pipelineA/
-   │   ├── pipelineB/
-   │   └── pipelineC/
+   │   └── pipelineA/
    ├── data/
-   │   └── RealSense/    # Include captured data
-   ├── results/          # Predictions, logs, plots
+   │   └── ucl/          # Include captured data (renamed from RealSense)
+   ├── results/          # Predictions, logs, plots for Pipeline A
    ├── requirements.txt
    └── README.md         # Explain structure and how to run
    ```
    - Note: `data/CW2-Dataset` and `weights/` should be deleted before submission.
 
 ## Current Progress
-Pipeline A is partially implemented, while Pipelines B and C are pending implementation.
+Pipeline A is implemented and has undergone initial tuning. Pipelines B and C will not be implemented as per the revised project scope.

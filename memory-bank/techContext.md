@@ -96,13 +96,14 @@ The project supports two main architectures for point cloud classification:
 
 ## Data Management
 
-### Dataset Split and Organization
+### Dataset Split and Organization (Under Review 2025-04-07)
 
-The data is split as follows:
-- **Training**: MIT sequences (~290 frames)
-- **Validation**: Stratified random subset of Harvard sequences (48 frames)
-- **Test Set 1**: Remaining stratified random subset of Harvard sequences (50 frames)
-- **Test Set 2**: Custom 'ucl' dataset (RealSense capture, defined by `UCL_DATA_CONFIG` in `config.py`)
+Two splits have been used:
+- **Original Split**: Training: MIT (~290). Validation: Harvard-Subset1 (48). Test Set 1: Harvard-Subset2 (50).
+- **Domain Adaptation Split**: Training: MIT + `harvard_tea_2` (~305). Validation: Harvard-Subset1 excl. `harvard_tea_2` (24). Test Set 1: Harvard-Subset2 excl. `harvard_tea_2` (50).
+- **Test Set 2 (Consistent)**: Custom 'ucl' dataset (RealSense capture, raw depth).
+
+The final split strategy is TBD pending class balance investigation of the Domain Adaptation training set.
 
 The data is organized by location:
 ```
@@ -125,19 +126,19 @@ data/
     └── labels/
         └── ucl_labels.txt # Custom text labels
 ```
-Validation and Test Set 1 frames are drawn from the Harvard sequences based on pre-generated frame lists (`validation_frames.pkl`, `test_frames.pkl`). Test Set 2 ('ucl') uses its own structure and label file.
+Validation and Test Set 1 frames are drawn from the relevant Harvard pool based on the split strategy being used, using frame lists (`validation_frames.pkl`, `test_frames.pkl`). Test Set 2 ('ucl') uses its own structure and label file.
 
 ### Data Characteristics and Notes
-- **Depth Format**: `harvard_tea_2` and the custom 'ucl' dataset use raw depth (`uint16`, likely mm), others use processed DepthTSDF (`float32`, likely meters). Handled in `dataset.py`.
+- **Depth Format**: `harvard_tea_2` and the custom 'ucl' dataset use raw depth (`uint16`, likely mm), others use processed DepthTSDF (`float32`, likely meters). Handled in `dataset.py`. The domain adaptation split included `harvard_tea_2` in training.
 - **Negative Samples**: `mit_gym_z_squash` and `harvard_tea_2` contain no tables. Labels for 'ucl' are defined in `ucl_labels.txt`.
 - **Missing Labels**: Specific frames in `76-1studyroom2`, `mit_32_d507`, `harvard_c11`, `mit_lab_hj` are noted in `CW2.pdf` as potentially missing table labels. This is handled by the current label loading logic (frames without labels are treated as negative).
 
-### Data Loading Pipeline
+### Data Loading Pipeline (As of 2025-04-07)
 
 The `TableDataset` class in `dataset.py` handles loading:
 - It accepts a `data_spec` argument which determines the loading strategy:
-    - **Training (`dict` starting with 'mit_'/'harvard_'):** Loads standard MIT/Harvard sequences based on `TRAIN_SEQUENCES` from `config.py`. Labels are derived from `tabletop_labels.dat`.
-    - **Validation/Test Set 1 (`list`):** Loads specific frames based on `VALIDATION_FRAMES` or `TEST_FRAMES` lists from `config.py`. Labels are derived from the original `tabletop_labels.dat` of the corresponding frames.
+    - **Training (`dict` starting with 'mit_'/'harvard_'):** Loads sequences based on `TRAIN_SEQUENCES` from `config.py`. The content of `TRAIN_SEQUENCES` depends on the split strategy being used (Original vs. Domain Adaptation). Labels are derived from `tabletop_labels.dat`.
+    - **Validation/Test Set 1 (`list`):** Loads specific frames based on `VALIDATION_FRAMES` or `TEST_FRAMES` lists from `config.py`. The content of these lists depends on the split strategy being used. Labels are derived from the original `tabletop_labels.dat` of the corresponding frames.
     - **Test Set 2 ('ucl') (`dict` with 'name'='ucl'):** Loads data based on `UCL_DATA_CONFIG` from `config.py`. It scans the specified `base_path` for depth/image files and loads binary labels from the specified text `label_file`. Assumes raw depth format.
 - It scans the relevant sequences or directories based on `data_spec`.
 - It loads depth, (optionally) RGB, and intrinsics.
