@@ -3,15 +3,23 @@ import sys
 import torch
 import torch.nn as nn
 import numpy as np
-import argparse
+# import argparse # Removed argparse import
 from pathlib import Path
 import matplotlib.pyplot as plt
 
+import sys # Keep sys for potential exit()
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import (
-    BASE_DATA_DIR, TEST_FRAMES, VALIDATION_FRAMES, REAL_SENSE_SEQUENCES, # Corrected import name
-    POINT_CLOUD_PARAMS, MODEL_PARAMS, WEIGHTS_DIR, RESULTS_DIR # Added MODEL_PARAMS
+    BASE_DATA_DIR, TEST_FRAMES, VALIDATION_FRAMES, # Removed REAL_SENSE_SEQUENCES
+    POINT_CLOUD_PARAMS, MODEL_PARAMS, WEIGHTS_DIR, RESULTS_DIR, # Added MODEL_PARAMS
+    UCL_DATA_CONFIG, # Import the UCL dataset config
+    # Import evaluation parameters (previously CLI args or defaults)
+    EVAL_CHECKPOINT, EVAL_TEST_SET, EVAL_MODEL_TYPE, EVAL_K,
+    EVAL_BATCH_SIZE, EVAL_VISUALIZE, EVAL_NUM_VISUALIZATIONS,
+    EVAL_RESULTS_DIR, # Optional results dir from config
+    # General config params
+    SEED, DEVICE, NUM_WORKERS
 )
 from models.classifier import get_model
 from models.utils import (
@@ -215,35 +223,36 @@ def analyze_results_by_sequence(predictions):
     
     return sequence_metrics
 
-def main(args):
-    """Main function for evaluation.
-    
-    Args:
-        args: Command line arguments
-    """
+def main():
+    """Main function for evaluation. Reads all configuration from config.py."""
     # Set random seed for reproducibility
-    set_seed(args.seed)
-    
+    set_seed(SEED) # Use SEED from config
+
     # Set device
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    device = torch.device(DEVICE if torch.cuda.is_available() else "cpu") # Use DEVICE from config
     print(f"Using device: {device}")
-    
-    # Create model
+
+    # Check if checkpoint exists
+    if not EVAL_CHECKPOINT or not os.path.exists(EVAL_CHECKPOINT):
+        print(f"Error: Evaluation checkpoint path not found or not specified in config: {EVAL_CHECKPOINT}")
+        sys.exit(1)
+
+    # Create model using parameters from config
     model = get_model(
-        model_type=args.model_type, # From CLI args
+        model_type=EVAL_MODEL_TYPE, # Use config value
         num_classes=2,
-        k=args.k,                   # From CLI args
-        emb_dims=MODEL_PARAMS['emb_dims'], # Use config value
-        dropout=MODEL_PARAMS['dropout'],   # Use config value (model.eval() handles disabling)
-        feature_dropout=MODEL_PARAMS.get('feature_dropout', 0.0) # Use config value
+        k=EVAL_K,                   # Use config value
+        emb_dims=MODEL_PARAMS['emb_dims'],
+        dropout=MODEL_PARAMS['dropout'],
+        feature_dropout=MODEL_PARAMS.get('feature_dropout', 0.0)
     )
-    
+
     # Move model to device
     model = model.to(device)
-    
+
     # Load checkpoint
-    model, _, _, _ = load_checkpoint(model, None, args.checkpoint)
-    
+    model, _, _, _ = load_checkpoint(model, None, EVAL_CHECKPOINT) # Use config value
+
     # Set model to evaluation mode
     model.eval()
     
@@ -254,11 +263,13 @@ def main(args):
     from torch.utils.data import DataLoader
     from data_processing.dataset import collate_fn # Assuming collate_fn is defined here or imported
 
-    if args.test_set == 1:
+    dataset_name = f"Test Set {EVAL_TEST_SET}" # Use config value
+
+    if EVAL_TEST_SET == 1: # Use config value
         # Use TEST_FRAMES list for Harvard test set
         if not TEST_FRAMES:
              print("Warning: TEST_FRAMES list is empty in config. Cannot evaluate Test Set 1.")
-             return # Or handle appropriately
+             return
         print(f"Evaluating on Test Set 1 (Harvard subset) using {len(TEST_FRAMES)} frame IDs.")
         test_dataset = TableDataset(
             data_root=BASE_DATA_DIR,
@@ -267,31 +278,33 @@ def main(args):
             mode='test',
             point_cloud_params=POINT_CLOUD_PARAMS
         )
-    elif args.test_set == 2:
-        # Use REAL_SENSE_SEQUENCES dictionary for RealSense test set
-        if not REAL_SENSE_SEQUENCES: # Use correct variable name
-             print("Warning: REAL_SENSE_SEQUENCES is empty in config. Cannot evaluate Test Set 2.")
-             return # Or handle appropriately
-        print(f"Evaluating on Test Set 2 (RealSense) using sequences: {list(REAL_SENSE_SEQUENCES.keys())}") # Use correct variable name
+        dataset_name = "Test Set 1 (Harvard)"
+    elif EVAL_TEST_SET == 2: # Use config value
+        # Use UCL_DATA_CONFIG dictionary for the custom UCL test set (now Test Set 2)
+        if not UCL_DATA_CONFIG:
+             print("Warning: UCL_DATA_CONFIG is not defined or empty in config. Cannot evaluate Test Set 2 (UCL).")
+             return
+        print(f"Evaluating on Test Set 2 (UCL) using config: {UCL_DATA_CONFIG.get('name', 'UCL')}") # Use get for safety
         test_dataset = TableDataset(
-            data_root=BASE_DATA_DIR,
-            sequences=REAL_SENSE_SEQUENCES, # Use correct variable name
+            data_root=BASE_DATA_DIR, # data_root is still needed for relative path calculations inside dataset
+            data_spec=UCL_DATA_CONFIG, # Pass the specific config dict
             augment=False,
             mode='test',
             point_cloud_params=POINT_CLOUD_PARAMS
         )
+        dataset_name = f"Test Set 2 ({UCL_DATA_CONFIG.get('name', 'UCL')})"
     else:
-        raise ValueError(f"Invalid test set specified: {args.test_set}. Choose 1 (Harvard) or 2 (RealSense).")
+        raise ValueError(f"Invalid test set specified in config (EVAL_TEST_SET): {EVAL_TEST_SET}. Choose 1 or 2.") # Use config value
 
     if len(test_dataset) == 0:
-        print(f"Error: Test dataset for Test Set {args.test_set} is empty. Cannot evaluate.")
+        print(f"Error: Test dataset for {dataset_name} is empty. Cannot evaluate.")
         return
 
     test_loader = DataLoader(
         test_dataset,
-        batch_size=args.batch_size,
+        batch_size=EVAL_BATCH_SIZE, # Use config value
         shuffle=False,
-        num_workers=args.num_workers,
+        num_workers=NUM_WORKERS,    # Use config value
         pin_memory=True,
         collate_fn=collate_fn
     )
@@ -315,18 +328,18 @@ def main(args):
     
     if metrics['auc_roc'] is not None:
         print(f"AUC-ROC: {metrics['auc_roc']:.4f}")
-    
+
     # Plot confusion matrix
-    results_dir = args.results_dir or RESULTS_DIR
+    results_dir = EVAL_RESULTS_DIR or RESULTS_DIR # Use config value or default
     os.makedirs(results_dir, exist_ok=True)
-    
+
     plot_confusion_matrix(
         metrics['confusion_matrix'],
         class_names=['No Table', 'Table'],
-        title=f'Confusion Matrix - Test Set {args.test_set}',
-        path=os.path.join(results_dir, f"confusion_matrix_test{args.test_set}.png")
+        title=f'Confusion Matrix - {dataset_name}',
+        path=os.path.join(results_dir, f"confusion_matrix_test{EVAL_TEST_SET}.png") # Use config value
     )
-    
+
     # Analyze results by sequence
     sequence_metrics = analyze_results_by_sequence(predictions)
     
@@ -337,52 +350,18 @@ def main(args):
         print(f"  Precision: {metrics['precision']:.4f}")
         print(f"  Recall: {metrics['recall']:.4f}")
         print(f"  F1-Score: {metrics['f1']:.4f}")
-    
+
     # Visualize some predictions
-    if args.visualize:
+    if EVAL_VISUALIZE: # Use config value
         print("\nVisualizing predictions...")
         visualize_predictions(
             predictions=predictions,
             results_dir=results_dir,
-            num_samples=args.num_visualizations
+            num_samples=EVAL_NUM_VISUALIZATIONS # Use config value
         )
-    
+
     print("Evaluation completed.")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Evaluate point cloud classifier")
-    
-    # Model parameters
-    parser.add_argument("--model_type", type=str, default="dgcnn",
-                        choices=["dgcnn", "pointnet"],
-                        help="Model type")
-    parser.add_argument("--k", type=int, default=MODEL_PARAMS.get('k', 20), # Default from config
-                        help="Number of nearest neighbors for DGCNN")
-    # Removed emb_dims argument, will be loaded from config
-    
-    # Evaluation parameters
-    parser.add_argument("--checkpoint", type=str, required=True,
-                        help="Path to model checkpoint")
-    parser.add_argument("--test_set", type=int, default=1,
-                        help="Test set to use (1: Harvard, 2: RealSense)")
-    parser.add_argument("--batch_size", type=int, default=16,
-                        help="Batch size")
-    parser.add_argument("--results_dir", type=str, default=None,
-                        help="Directory to save results")
-    
-    # Visualization parameters
-    parser.add_argument("--visualize", action="store_true",
-                        help="Visualize predictions")
-    parser.add_argument("--num_visualizations", type=int, default=5,
-                        help="Number of samples to visualize")
-    
-    # Other parameters
-    parser.add_argument("--seed", type=int, default=42,
-                        help="Random seed")
-    parser.add_argument("--device", type=str, default="cuda",
-                        help="Device to use")
-    parser.add_argument("--num_workers", type=int, default=4,
-                        help="Number of workers for data loading")
-    
-    args = parser.parse_args()
-    main(args)
+    # Removed argparse setup and conditional logic
+    main() # Call main directly

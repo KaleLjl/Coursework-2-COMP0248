@@ -1,6 +1,6 @@
 import os
 import sys
-import argparse
+# import argparse # Removed argparse import
 import torch
 import numpy as np
 import cv2
@@ -12,86 +12,100 @@ project_root = Path(__file__).resolve().parents[2]
 sys.path.append(str(project_root))
 
 from src.pipelineA.data_processing.dataset import TableDataset, collate_fn, create_data_loaders
-from src.pipelineA.models.classifier import DGCNN, PointNet # Import model classes
+from src.pipelineA.models.classifier import get_model # Import model factory
+from src.pipelineA.models.utils import load_checkpoint # Import checkpoint loader
 from src.pipelineA.config import (
-    BASE_DATA_DIR, TEST_FRAMES, MODEL_PARAMS, POINT_CLOUD_PARAMS
+    BASE_DATA_DIR, TEST_FRAMES, UCL_DATA_CONFIG, # Removed REAL_SENSE_SEQUENCES, Import dataset specs
+    MODEL_PARAMS, POINT_CLOUD_PARAMS,
+    # Import visualization/evaluation parameters from config
+    EVAL_CHECKPOINT, EVAL_TEST_SET, VIS_OUTPUT_DIR, # Use EVAL_CHECKPOINT and EVAL_TEST_SET
+    # General config params
+    DEVICE, NUM_WORKERS
 )
 
-def visualize_predictions(args):
-    """Loads a model, runs inference on the test set, and saves annotated images."""
+def visualize_predictions():
+    """Loads a model, runs inference on the test set, and saves annotated images. Reads config from config.py."""
 
     # --- Configuration ---
-    device = torch.device("cuda" if torch.cuda.is_available() and args.use_cuda else "cpu")
+    # Use DEVICE from config, check CUDA availability
+    use_cuda = DEVICE.startswith("cuda") and torch.cuda.is_available()
+    device = torch.device(DEVICE if use_cuda else "cpu")
     print(f"Using device: {device}")
 
-    output_dir = Path(args.output_dir)
+    # Use VIS_OUTPUT_DIR from config
+    output_dir = Path(VIS_OUTPUT_DIR)
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Saving visualizations to: {output_dir}")
 
     # --- Load Model ---
-    model_path = Path(args.model_path)
+    # Use MODEL_PARAMS from config.py for consistency
+    model_type = MODEL_PARAMS.get('model_type', 'dgcnn')
+    print(f"Using model type from config: {model_type}")
+
+    # Instantiate model using the factory function and config parameters
+    model = get_model(
+        model_type=model_type,
+        num_classes=MODEL_PARAMS.get('num_classes', 2), # Default to 2 classes
+        k=MODEL_PARAMS.get('k', 20),
+        emb_dims=MODEL_PARAMS.get('emb_dims', 1024),
+        dropout=MODEL_PARAMS.get('dropout', 0.5),
+        feature_dropout=MODEL_PARAMS.get('feature_dropout', 0.0)
+    ).to(device)
+
+    # Load checkpoint using the utility function and EVAL_CHECKPOINT from config
+    model_path = Path(EVAL_CHECKPOINT) # Use EVAL_CHECKPOINT
     if not model_path.exists():
-        print(f"Error: Model checkpoint not found at {model_path}")
-        return
-
-    checkpoint = torch.load(model_path, map_location=device)
-
-    # Determine model type from checkpoint or args (prefer checkpoint if available)
-    # Use MODEL_PARAMS from config as a fallback if not in checkpoint
-    model_config = checkpoint.get('config', {}).get('MODEL_PARAMS', MODEL_PARAMS)
-    model_type = model_config.get('model_type', MODEL_PARAMS['model_type']) # Default to config if needed
-
-    print(f"Loading model type: {model_type}")
-    print(f"Model config used: {model_config}")
-
-    # Instantiate the correct model based on type
-    # Ensure num_classes is present, default to 2 if missing
-    if 'num_classes' not in model_config:
-        print("Warning: 'num_classes' not found in model config, defaulting to 2.")
-        model_config['num_classes'] = 2
-
-    if model_type == 'dgcnn':
-        # Filter config keys to only those expected by DGCNN constructor
-        dgcnn_keys = {'num_classes', 'k', 'emb_dims', 'dropout', 'feature_dropout'}
-        filtered_config = {k: v for k, v in model_config.items() if k in dgcnn_keys}
-        model = DGCNN(**filtered_config).to(device) # Unpack the filtered dictionary
-    elif model_type == 'pointnet':
-         # Filter config keys for PointNet
-        pointnet_keys = {'num_classes', 'dropout'}
-        filtered_config = {k: v for k, v in model_config.items() if k in pointnet_keys}
-        model = PointNet(**filtered_config).to(device) # Unpack the filtered dictionary
-    else:
-        print(f"Error: Unknown model type '{model_type}'")
+        print(f"Error: Model checkpoint not found at {model_path} (specified in config as EVAL_CHECKPOINT)")
         return
 
     try:
-        model.load_state_dict(checkpoint['model_state_dict'])
+        # Pass None for optimizer as we are only evaluating
+        model, _, _, _ = load_checkpoint(model, None, str(model_path))
         print(f"Loaded model weights from {model_path}")
-    except KeyError:
-        print(f"Error: 'model_state_dict' not found in checkpoint {model_path}")
-        return
-    except RuntimeError as e:
-        print(f"Error loading state dict: {e}")
-        print("Ensure model architecture in config matches the checkpoint.")
+    except Exception as e:
+        print(f"Error loading checkpoint from {model_path}: {e}")
         return
 
     model.eval() # Set model to evaluation mode
 
     # --- Load Test Data ---
-    # Use create_data_loaders to get the test loader configured correctly
-    _, _, test_loader = create_data_loaders(
-        data_root=args.data_root,
-        test_spec=TEST_FRAMES, # Use the test frame list from config
-        batch_size=1, # Process one image at a time
-        num_workers=args.num_workers,
-        point_cloud_params=POINT_CLOUD_PARAMS # Use point cloud params from config
-    )
+    # Use EVAL_TEST_SET from config
+    test_set_to_use = EVAL_TEST_SET # Use EVAL_TEST_SET
+    print(f"Visualizing Test Set: {test_set_to_use} (from config EVAL_TEST_SET)") # Use EVAL_TEST_SET
 
-    if not test_loader:
-        print("Error: Failed to create test data loader.")
+    # Select the appropriate data specification based on the test set
+    if test_set_to_use == 1:
+        data_spec = TEST_FRAMES
+        dataset_name = "Test Set 1 (Harvard)"
+        if not data_spec:
+             print("Warning: TEST_FRAMES list is empty in config. Cannot visualize Test Set 1.")
+             return
+    elif test_set_to_use == 2:
+        data_spec = UCL_DATA_CONFIG
+        dataset_name = f"Test Set 2 ({UCL_DATA_CONFIG.get('name', 'UCL')})" # Updated name
+        if not data_spec:
+             print("Warning: UCL_DATA_CONFIG is not defined or empty in config. Cannot visualize Test Set 2.") # Updated message
+             return
+    else:
+        print(f"Error: Invalid test set specified in config (EVAL_TEST_SET): {test_set_to_use}. Choose 1 or 2.") # Use EVAL_TEST_SET, updated range
         return
 
-    print(f"Loaded {len(test_loader.dataset)} test samples.")
+    print(f"Loading data for: {dataset_name}")
+
+    # Use create_data_loaders with the selected data_spec and config parameters
+    _, _, test_loader = create_data_loaders(
+        data_root=BASE_DATA_DIR, # Use BASE_DATA_DIR from config
+        test_spec=data_spec,
+        batch_size=1, # Process one image at a time for visualization
+        num_workers=NUM_WORKERS, # Use NUM_WORKERS from config
+        point_cloud_params=POINT_CLOUD_PARAMS
+    )
+
+    if not test_loader or len(test_loader.dataset) == 0:
+        print(f"Error: Failed to create or test data loader is empty for {dataset_name}.")
+        return
+
+    print(f"Loaded {len(test_loader.dataset)} test samples for {dataset_name}.")
 
     # --- Run Inference and Visualize ---
     class_names = {0: "No Table", 1: "Table"}
@@ -153,21 +167,5 @@ def visualize_predictions(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Visualize model predictions on test images.")
-    parser.add_argument('--model_path', type=str,
-                        default='weights/pipelineA/dgcnn_20250405_145031/model_best.pt',
-                        help='Path to the trained model checkpoint.')
-    parser.add_argument('--data_root', type=str, default=BASE_DATA_DIR,
-                        help='Root directory of the dataset.')
-    parser.add_argument('--output_dir', type=str,
-                        default='results/pipelineA/test_set_visualizations',
-                        help='Directory to save annotated images.')
-    parser.add_argument('--num_workers', type=int, default=4,
-                        help='Number of workers for data loading.')
-    parser.add_argument('--use_cuda', action='store_true', default=True,
-                        help='Use CUDA if available.')
-    parser.add_argument('--no_cuda', action='store_false', dest='use_cuda',
-                        help='Do not use CUDA.')
-
-    args = parser.parse_args()
-    visualize_predictions(args)
+    # Removed argparse setup
+    visualize_predictions() # Call function directly

@@ -4,14 +4,14 @@
 
 ```mermaid
 pie title Project Implementation Status
-    "Pipeline A" : 60
+    "Pipeline A" : 65
     "Pipeline B" : 0
     "Pipeline C" : 0
-    "RealSense Data Collection" : 0
-    "Documentation & Report" : 15
+    "UCL (RealSense) Dataset Integration" : 100
+    "Documentation & Report" : 20
 ```
 
-The project is in its early stages with focus primarily on Pipeline A implementation. Pipelines B and C have not yet been started. Documentation and setup are partially complete.
+The project is in its early stages with focus primarily on Pipeline A implementation and setup. Pipelines B and C have not yet been started. Documentation and setup are partially complete.
 
 ## Pipeline A: Depth to Point Cloud Classification
 
@@ -49,7 +49,7 @@ The project is in its early stages with focus primarily on Pipeline A implementa
     - **Observation**: Drop from validation accuracy (0.8542) indicates significant overfitting (Val-Test Gap: 0.1142).
 - ✅ **Analyze Baseline Results**: Completed. Confirmed overfitting.
 - ✅ **Plan Regularization Experiments**: Decided to start with `dropout=0.5` (Exp 1), then add `weight_decay=1e-4` (Exp 2).
-- ✅ **Run Experiment 1 (Dropout=0.5)**: Completed training run `dgcnn_20250405_145031`.
+cl- ✅ **Run Experiment 1 (Dropout=0.5)**: Completed training run `dgcnn_20250405_145031`.
     - **Best Validation Results (Epoch 45)**: Acc: 0.9375, F1: 0.9552.
 - ✅ **Evaluate Experiment 1 on Test Set**: Completed evaluation on Test Set 1.
     - **Results**: Acc: 0.8000, Precision: 0.9062, Recall: 0.8056, F1: 0.8529, AUC: 0.8214.
@@ -84,17 +84,32 @@ The project is in its early stages with focus primarily on Pipeline A implementa
 - ✅ **Analyze Experiment 5 Results**: Completed. PointNet is not suitable with current setup.
 - ✅ **Conclude Pipeline A Tuning**: Experiment 1 (DGCNN, D=0.5) remains the best configuration.
 - ✅ **Create Test Result Visualization Script**: Created `src/pipelineA/visualize_test_predictions.py` to annotate RGB images with predictions.
+- ✅ **Enable Custom Dataset ('ucl') Evaluation (as Test Set 2)**:
+    - ✅ Added `UCL_DATA_CONFIG` to `config.py`.
+    - ✅ Modified `dataset.py` to load 'ucl' data and text labels.
+    - ✅ Modified `evaluate.py` and `visualize_test_predictions.py` to accept `EVAL_TEST_SET=2` for 'ucl'.
+- ✅ **Enable Default Evaluation Run**:
+    - ✅ Added `DEFAULT_EVAL_*` parameters to `config.py`.
+    - ✅ Modified `evaluate.py` to use defaults if no CLI args are provided.
+- ✅ **Centralize Configuration (Cleanup Task 1)**:
+    - ✅ Removed CLI argument parsing from `train.py`, `evaluate.py`, `visualize_test_predictions.py`.
+    - ✅ Updated scripts to source all parameters from `config.py`.
+    - ✅ Added necessary general (`SEED`, `DEVICE`, etc.) and specific (`EVAL_*`, `VIS_*`) parameters to `config.py`.
+- ✅ **Fix Visualization Script Config Usage**: Updated `visualize_test_predictions.py` to use `EVAL_CHECKPOINT` and `EVAL_TEST_SET` from `config.py`.
+- ✅ **Verify Pipeline A Workflow**: Successfully executed `train.py` (briefly), `evaluate.py`, and `visualize_test_predictions.py` using the centralized configuration, confirming the workflow functions correctly after the cleanup.
+- ✅ **Fix Visualization Image Matching**: Updated `dataset.py` to match depth/image files by frame number, then by sorted order if counts match. Resolved warnings for most sequences.
+- ✅ **Investigate Remaining Visualization Warnings**: Confirmed remaining warnings for `harvard_tea_2` are due to dataset inconsistency (33 depth vs 24 image files), preventing order-based matching.
+- ✅ **Consolidate Test Sets (Cleanup)**: Unified Test Set 2 (RealSense) and Test Set 3 (UCL) into a single Test Set 2 using `UCL_DATA_CONFIG`. Updated `config.py`, `evaluate.py`, `visualize_test_predictions.py`, and Memory Bank files.
 
 ### In Progress
 
-- 🔄 **Prepare for Next Phase**: Reverting config to best settings (DGCNN, D=0.5) and planning next steps (Pipeline B/C).
+- 🔄 **Determine Next Task**: Waiting for user input on the next step (e.g., Pipeline B/C implementation, report writing).
 
 ### Not Started
 
-- ✅ **Verify Data Loaders**: Confirmed `create_data_loaders` loads correct sample counts (Train: 281, Val: 48, Test: 50).
+- ✅ **Verify Data Loaders**: Confirmed `create_data_loaders` loads correct sample counts (Train: 281, Val: 48, Test1: 50). Need to verify Test2 (UCL) count if run.
 - ❌ **Pipeline B Implementation**
 - ❌ **Pipeline C Implementation**
-- ❌ **RealSense Data Collection & Evaluation**
 - ❌ **Report Writing**
 
 ### Known Issues
@@ -108,6 +123,7 @@ The project is in its early stages with focus primarily on Pipeline A implementa
     - Depth Format: `harvard_tea_2` uses raw depth.
 - 🐞 Handling of invalid depth values during point cloud generation could be more robust (lower priority).
 - 🐞 Point cloud sampling strategy ('random') might need optimization (lower priority).
+- ℹ️ Custom 'ucl' dataset (Test Set 2) uses raw depth (`uint16`) and requires a text label file (`ucl_labels.txt`).
 
 ## Pipeline B: RGB to Depth to Classification
 
@@ -127,15 +143,14 @@ Planned components:
 - Segmentation model implementation
 - Evaluation and visualization tools
 
-## RealSense Data Collection
+## UCL (RealSense) Dataset Integration
 
-### Status: Not Started
+### Status: Complete
 
-Planned activities:
-- Setup of RealSense camera
-- Planning of capture environments
-- Data collection sessions
-- Data processing and organization
+- The custom 'ucl' dataset, captured using a RealSense camera, is now integrated as Test Set 2.
+- Configuration (`UCL_DATA_CONFIG`) is defined in `config.py`.
+- Data loading logic in `dataset.py` handles this dataset.
+- Evaluation and visualization scripts (`evaluate.py`, `visualize_test_predictions.py`) can use this dataset by setting `EVAL_TEST_SET=2` in `config.py`.
 
 ## Additional Tasks
 
@@ -162,11 +177,12 @@ Initial approach: MIT sequences for training, random 80/20 split within MIT for 
 
 Intermediate approach: MIT for training, full Harvard set for validation. *Issue: Test set not unseen, potentially inflated validation metrics.*
 
-Current strategy (Implemented):
+Current strategy (Implemented & Consolidated):
 - **Training**: MIT sequences (290 frames).
 - **Validation**: Stratified random subset of Harvard sequences (48 frames).
 - **Test Set 1**: Remaining stratified random subset of Harvard sequences (50 frames).
-- **Rationale**: Provides validation data for monitoring/tuning during training while preserving a truly unseen test set (Test Set 1) for final evaluation. Addresses methodological concerns and aligns better with standard practices.
+- **Test Set 2**: Custom 'ucl' dataset (RealSense capture, size varies).
+- **Rationale**: Provides validation data for monitoring/tuning during training while preserving truly unseen test sets (Test Set 1 and Test Set 2) for final evaluation. Addresses methodological concerns and aligns better with standard practices.
 
 ### Model Architecture
 
@@ -215,7 +231,7 @@ Current Strategy:
 - **Evaluation (Exp 4)**: Test Acc: 0.7800 (Val Acc: 0.9167). Slightly worse than Exp 1.
 - **Configuration (Exp 5)**: Aug=True, D=0.5, WD=0.0, FD=0.0, Clip=0.0, Model=PointNet.
 - **Evaluation (Exp 5)**: Test Acc: 0.7200 (Val Acc: 0.7083). Poor performance.
-- **Next Steps**: Revert config to Exp 1 settings (DGCNN, D=0.5). Plan next major phase (Pipeline B/C). Continue using early stopping based on validation set performance.
+- **Next Steps**: Configuration is set to Exp 1 settings (DGCNN, D=0.5). Plan next major phase (Pipeline B/C). Continue using early stopping based on validation set performance.
 
 ## Milestones and Timeline
 
@@ -255,9 +271,24 @@ Current Strategy:
 | Update Memory Bank (Post-Exp 5) | TBD | **Complete** |
 | Create Visualization Script | TBD | **Complete** |
 | Update Memory Bank (Post-Visualization Script) | TBD | **Complete** |
-| Prepare for Next Phase | TBD | **In Progress** |
+| Enable Custom Dataset ('ucl') Evaluation | TBD | **Complete** |
+| Update Memory Bank (Post-'ucl' Enablement) | TBD | **Complete** |
+| Enable Default Evaluation Run | TBD | **Complete** |
+| Update Memory Bank (Post-Default Eval) | TBD | **Complete** |
+| Cleanup Task 1: Remove CLI Args & Centralize Config | 2025-04-07 | **Complete** |
+| Update Memory Bank (Post-Cleanup Task 1) | 2025-04-07 | **Complete** |
+| Fix Visualization Script Config Usage | 2025-04-07 | **Complete** |
+| Verify Pipeline A Workflow | 2025-04-07 | **Complete** |
+| Update Memory Bank (Post-Verification) | 2025-04-07 | **Complete** |
+| Fix Visualization Image Matching (Attempts 1 & 2) | 2025-04-07 | **Complete** |
+| Investigate Remaining Visualization Warnings | 2025-04-07 | **Complete** |
+| Update Memory Bank (Post-Vis Warning Fix) | 2025-04-07 | **Complete** |
+| Cleanup Task 2: Consolidate Test Sets (UCL as Test Set 2) | 2025-04-07 | **Complete** |
+| Update Memory Bank (Post-Test Set Consolidation) | 2025-04-07 | **Complete** |
+| Fix ImportError Post-Cleanup | 2025-04-07 | **Complete** |
+| Update Memory Bank (Post-ImportError Fix) | 2025-04-07 | **Complete** |
+| Determine Next Task | TBD | **In Progress** |
 | Pipeline B implementation | TBD | Not Started |
 | Pipeline C implementation | TBD | Not Started |
-| RealSense data collection & Eval | TBD | Not Started |
 | Report draft | TBD | Not Started |
 | Final submission | TBD | Not Started |

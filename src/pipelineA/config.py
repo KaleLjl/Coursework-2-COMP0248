@@ -52,9 +52,6 @@ except Exception as e:
 #     "harvard_tea_2": ["hv_tea2_2"]  # Raw depth
 # }
 
-# Test 2 sequences (RealSense) - To be collected
-REAL_SENSE_SEQUENCES = {}
-
 # Point cloud parameters
 POINT_CLOUD_PARAMS = {
     "num_points": 2048,  # Number of points to sample
@@ -99,6 +96,37 @@ AUGMENTATION_PARAMS = {
     "random_subsample": True,        # Apply random subsampling during training
     "subsample_range": [0.7, 0.95],  # Range for random subsampling ratio
 }
+
+# General Training/Evaluation Settings (Previously CLI args or parser defaults)
+SEED = 42
+DEVICE = "cuda" # "cuda" or "cpu"
+NUM_WORKERS = 4
+EXP_NAME = None # Optional experiment name for logging/checkpointing
+AUGMENT = AUGMENTATION_PARAMS["enabled"] # Control augmentation based on AUGMENTATION_PARAMS
+
+# Configuration for the custom UCL dataset
+UCL_DATA_CONFIG = {
+    'base_path': os.path.join(BASE_DATA_DIR, 'ucl'), # Path to data/CW2-Dataset/data/ucl
+    'label_file': os.path.join(BASE_DATA_DIR, 'ucl', 'labels', 'ucl_labels.txt'), # Path to your label file
+    'name': 'ucl' # Identifier
+}
+
+# Evaluation Parameters (used by evaluate.py and visualize_test_predictions.py)
+EVAL_CHECKPOINT = str(PROJECT_ROOT / "weights" / "pipelineA" / "dgcnn_20250407_142213" / "model_best.pt") # Updated path to existing checkpoint
+# Specifies the test set to use for evaluation and visualization.
+# 1: Harvard subset (defined by TEST_FRAMES loaded from test_frames.pkl)
+# 2: UCL custom dataset (RealSense capture, defined by UCL_DATA_CONFIG)
+EVAL_TEST_SET = 2 # Default to Harvard subset (Test Set 1)
+EVAL_MODEL_TYPE = MODEL_PARAMS['model_type'] # Use model type from MODEL_PARAMS
+EVAL_K = MODEL_PARAMS.get('k', 20)           # Use k from MODEL_PARAMS
+EVAL_BATCH_SIZE = TRAIN_PARAMS['batch_size'] # Default to training batch size
+EVAL_VISUALIZE = False # Whether evaluate.py should also visualize samples
+EVAL_NUM_VISUALIZATIONS = 5 # Number of samples to visualize if EVAL_VISUALIZE is True
+EVAL_RESULTS_DIR = None # Optional: Specify a different directory for evaluation results, otherwise uses RESULTS_DIR
+
+# Visualization Script Parameters (used by visualize_test_predictions.py)
+# Note: Uses EVAL_CHECKPOINT and EVAL_TEST_SET from above
+VIS_OUTPUT_DIR = PROJECT_ROOT / "results" / "pipelineA" / "test_set_visualizations" # Specific dir for visualization script output
 
 # Paths for saving models and results
 WEIGHTS_DIR = PROJECT_ROOT / "weights" / "pipelineA"

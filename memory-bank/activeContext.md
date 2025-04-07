@@ -2,19 +2,41 @@
 
 ## Current Focus
 
-The primary focus is now on **concluding the Pipeline A improvement phase** and **planning the next major phase** of the project. This involves:
-1.  **Result Analysis (Exp 5 - PointNet)**: Reviewing the performance metrics (Val Acc 0.7083, Test Acc 0.7200, F1 0.8372, AUC 0.4226). PointNet performed poorly, essentially classifying everything as Table.
-2.  **Conclusion**: Pipeline A tuning complete for now. Experiment 1 (DGCNN, D=0.5) remains the best configuration (Test Acc 0.8000, F1 0.8529). Switching to PointNet was detrimental.
-3.  **Memory Bank Update**: Documenting Experiment 5 results and the conclusion.
-4.  **Next Phase Planning**: Recommend starting Pipeline B or C.
+The project has just completed fixing an `ImportError` that arose after the test set consolidation cleanup.
+
+The next focus is to determine the subsequent task (e.g., Pipeline B/C implementation, report writing).
 
 ## Recent Changes
 
-1.  **Update Memory Bank (Post-Exp 4)**: Documented Experiment 4 results in `activeContext.md` and `progress.md`.
+1.  **Fix ImportError Post-Cleanup**: Removed the import of `REAL_SENSE_SEQUENCES` from `evaluate.py` and `visualize_test_predictions.py` after it was deleted from `config.py` during the test set consolidation, resolving the `ImportError`. Updated Memory Bank.
+2.  **Consolidate Test Sets (Cleanup)**: Modified `config.py`, `evaluate.py`, and `visualize_test_predictions.py` to remove the unused `REAL_SENSE_SEQUENCES` definition and designate the UCL dataset (using `UCL_DATA_CONFIG`) as Test Set 2. Updated relevant comments and logic. Updated Memory Bank files accordingly.
+3.  **Initiate Cleanup Phase**: Shifted focus from new pipeline development to project cleanup.
+2.  **Remove CLI Args (`train.py`)**: Modified `src/pipelineA/training/train.py` to remove `argparse` and source all parameters from `config.py`. (Used `write_to_file` fallback).
+3.  **Remove CLI Args (`evaluate.py`)**: Modified `src/pipelineA/training/evaluate.py` to remove `argparse` and source all parameters from `config.py`.
+4.  **Remove CLI Args (`visualize_test_predictions.py`)**: Modified `src/pipelineA/visualize_test_predictions.py` to remove `argparse` and source all parameters from `config.py`.
+5.  **Update `config.py`**: Added necessary top-level configuration variables (e.g., `SEED`, `DEVICE`, `NUM_WORKERS`, `AUGMENT`, `EXP_NAME`) and consolidated evaluation/visualization parameters (e.g., `EVAL_CHECKPOINT`, `EVAL_TEST_SET`, `VIS_OUTPUT_DIR`) previously handled by CLI or defaults. Renamed default evaluation parameters for clarity.
+
+*(Previous changes retained below)*
+1.  **Update Memory Bank (Post-Exp 5)**: Documented Experiment 5 results and the conclusion.
 2.  **Configuration Update (Exp 5)**: Modified `src/pipelineA/config.py` to set `MODEL_PARAMS['model_type'] = 'pointnet'` (keeping D=0.5, WD=0, FD=0).
 3.  **Execute Training (Exp 5 - PointNet)**: Ran `src/pipelineA/training/train.py --model pointnet`. Best validation F1: 0.8293, Acc: 0.7083 at Epoch 2. Run ID: `pointnet_20250405_155003`.
 4.  **Execute Evaluation (Exp 5 - PointNet)**: Ran `src/pipelineA/training/evaluate.py --model_type pointnet` on the best checkpoint. Results: Acc: 0.7200, Precision: 0.7200, Recall: 1.0000, F1: 0.8372, AUC: 0.4226. Poor performance.
 5.  **Create Visualization Script**: Created `src/pipelineA/visualize_test_predictions.py` to load the best model, run inference on Test Set 1, and save annotated RGB images showing predictions vs ground truth to `results/pipelineA/test_set_visualizations/`.
+6.  **Enable Custom Dataset Evaluation ('ucl')**:
+    *   Added `UCL_DATA_CONFIG` to `src/pipelineA/config.py` specifying the path to the 'ucl' dataset and its text label file.
+    *   Modified `src/pipelineA/data_processing/dataset.py` (`TableDataset._load_and_filter_samples`, added `_load_ucl_dataset`) to handle loading data based on `UCL_DATA_CONFIG` and reading labels from the specified text file.
+    *   Modified `src/pipelineA/training/evaluate.py` to accept `--test_set 2` (previously 3) and use the `UCL_DATA_CONFIG` to load and evaluate the 'ucl' dataset.
+7.  **Enable Default Evaluation Run**:
+    *   Added default evaluation parameters (`DEFAULT_EVAL_CHECKPOINT`, `DEFAULT_EVAL_TEST_SET`, etc.) to `src/pipelineA/config.py`.
+    *   Modified `src/pipelineA/training/evaluate.py` to check `sys.argv`. If no command-line arguments are provided, it uses the default parameters from `config.py` instead of requiring CLI input.
+8.  **Align Visualization Script (Initial)**: Modified `src/pipelineA/visualize_test_predictions.py` to align with `evaluate.py`. It now uses the `get_model` factory and `load_checkpoint` utility, sourcing model parameters and the default checkpoint path from `config.py` for consistency. Fixed a `TypeError` in the `load_checkpoint` call.
+9.  **Align Visualization Script (Dataset Selection)**: Further modified `src/pipelineA/visualize_test_predictions.py` to include an optional `--test_set` argument (no longer used due to config centralization). If omitted, the script now defaults to visualizing the dataset specified by `EVAL_TEST_SET` in `config.py`, matching the default evaluation behavior. `EVAL_TEST_SET` selects Test Set 1 (Harvard) or 2 (UCL).
+10. **Fix Visualization Script Config Usage**: Updated `src/pipelineA/visualize_test_predictions.py` to use the correct centralized configuration variables (`EVAL_CHECKPOINT`, `EVAL_TEST_SET`) instead of the removed `VIS_MODEL_PATH` and `VIS_TEST_SET`.
+11. **Verify Pipeline A Workflow**: Successfully executed `train.py` (briefly), `evaluate.py`, and the fixed `visualize_test_predictions.py` using the centralized configuration, confirming the workflow functions correctly after the *initial* cleanup.
+12. **Fix Visualization Image Matching (Attempt 1)**: Updated `src/pipelineA/data_processing/dataset.py` to match depth and image files based on frame number (ignoring timestamps). This resolved warnings for some sequences but not `harvard_tea_2`.
+13. **Investigate `harvard_tea_2` Warnings**: Listed files and found frame numbers were offset between depth and image files.
+14. **Fix Visualization Image Matching (Attempt 2)**: Updated `src/pipelineA/data_processing/dataset.py` to match files by sorted order if file counts match.
+15. **Confirm Dataset Inconsistency**: Re-running visualization revealed a mismatch in file counts (33 depth vs 24 image) for `harvard_tea_2`, preventing order-based matching. Concluded remaining warnings for `harvard_tea_2` are due to this dataset inconsistency and cannot be fixed via code logic.
 
 *(Previous changes retained below)*
 1.  **Memory Bank Refresh**: Read all core memory bank files to establish context.
@@ -42,11 +64,7 @@ Work has focused on implementing the new data split strategy:
 
 ## Next Steps
 
-1.  **Update Memory Bank**: Document Experiment 5 results, conclusion, and visualization script creation in `activeContext.md` (this update), `systemPatterns.md`, and `progress.md`.
-2.  **Execute Visualization**: Run the newly created `src/pipelineA/visualize_test_predictions.py` script to generate annotated images for Test Set 1 using the best DGCNN model (Exp 1).
-3.  **Revert Config**: Modify `src/pipelineA/config.py` to set `MODEL_PARAMS['model_type'] = 'dgcnn'` (reverting from PointNet).
-4.  **Propose Next Phase**: Ask user to choose between starting Pipeline B or Pipeline C after reviewing visualizations.
-5.  **(Lower Priority)** RealSense data collection.
+1.  **Determine Next Task**: Ask user for the next step (e.g., Pipeline B/C implementation, report writing).
 
 ## Active Decisions and Considerations
 
@@ -69,6 +87,9 @@ Work has focused on implementing the new data split strategy:
 2.  **Configuration**: Centralize dataset specifications (sequences, frame lists) and hyperparameters in `config.py`.
 3.  **Testing**: Maintain a clear separation between the validation set (used during development) and the test set (used only for final evaluation).
 4.  **Script Consistency**: Maintain consistency between training and evaluation scripts, especially regarding model architecture instantiation, by referencing shared configuration files (`config.py`) where possible.
+5.  **Custom Data Integration**: Modifications to `config.py`, `dataset.py`, `evaluate.py`, and `visualize_test_predictions.py` allow for evaluating the custom UCL dataset (now designated Test Set 2) using `EVAL_TEST_SET=2`. Requires the dataset to follow the expected directory structure (depth/, image/, intrinsics.txt) and have a text label file specified in `UCL_DATA_CONFIG`.
+6.  **Configuration Centralization**: Scripts (`train.py`, `evaluate.py`, `visualize_test_predictions.py`) now exclusively use `config.py` for all configuration parameters, removing the need for command-line arguments and ensuring consistency.
+7.  **Script Standardization**: Aligning `visualize_test_predictions.py` with `evaluate.py` improves maintainability and reduces potential inconsistencies by using shared utilities (`get_model`, `load_checkpoint`), configuration (`config.py`), and dataset selection logic (now unified for Test Set 1 and 2).
 
 ## Learnings and Project Insights
 

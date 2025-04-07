@@ -43,25 +43,27 @@ graph TD
 
 1. **Data Processing**:
    - `depth_to_pointcloud.py`: Converts depth maps to 3D point clouds
-   - `dataset.py`: Handles data loading and preprocessing (using sequence dict for train, frame lists for val/test)
+   - `dataset.py`: Handles data loading and preprocessing. Now supports multiple `data_spec` formats: sequence dict (train), frame lists (val/test1), and custom dataset config dict (e.g., for 'ucl' dataset, loading labels from text file).
    - `preprocessing.py`: Contains point cloud preprocessing functions
-   - Data split: MIT=Train, Harvard-Subset1=Validation, Harvard-Subset2=Test1
+   - Data split: MIT=Train, Harvard-Subset1=Validation, Harvard-Subset2=Test1, UCL=Test2.
 
 2. **Models**:
    - `classifier.py`: Implements neural network architectures for point cloud classification
    - `utils.py`: Provides utility functions for model operations
 
 3. **Training**:
-   - `train.py`: Handles model training and validation
-   - `evaluate.py`: Evaluates model performance on validation or test data. Now aligned to use model parameters (`emb_dims`, `feature_dropout`) from `config.py` for instantiation, ensuring consistency with training.
-   - Training uses MIT sequences, validation uses Harvard-Subset1
+   - `train.py`: Handles model training and validation.
+   - `evaluate.py`: Evaluates model performance on specified test sets (Test Set 1: Harvard, Test Set 2: UCL). Reads all configuration from `config.py`.
+   - Training uses MIT sequences, validation uses Harvard-Subset1.
 
 4. **Configuration**:
-   - `config.py`: Centralizes configuration parameters (including model architecture details like `emb_dims`, `dropout`, `feature_dropout`). Used by both `train.py` and `evaluate.py` for model instantiation.
-   - Loads validation/test frame lists from pickle files
+   - `config.py`: Centralizes ALL configuration parameters (data paths, model params, training settings, evaluation settings, visualization settings, dataset specs). Used by `train.py`, `evaluate.py`, `visualize_test_predictions.py`, and `dataset.py`.
+   - Loads validation/test frame lists from pickle files.
+   - Contains general settings like `SEED`, `DEVICE`, `NUM_WORKERS`.
+   - Contains specific settings for evaluation (`EVAL_*`) and visualization (`VIS_*`).
 
 5. **Visualization**:
-   - `visualize_test_predictions.py`: Loads a trained model, runs inference on the test set (Test Set 1), and saves annotated RGB images showing the predicted vs. ground truth labels.
+   - `visualize_test_predictions.py`: Loads a trained model, runs inference on the configured test set, and saves annotated RGB images. Reads all configuration from `config.py`.
 
 ### Data Flow
 
@@ -113,8 +115,10 @@ graph LR
        def __len__()
    ```
    
-   The `data_spec` parameter now determines whether to load MIT sequences (dict for training) 
-   or specific Harvard frame lists (list for validation/test).
+   The `data_spec` parameter now determines the loading strategy:
+   - `dict` (starting with 'mit_'/'harvard_'): Standard training sequences.
+   - `list`: Specific frame IDs for validation or standard test sets.
+   - `dict` (with 'name' key, e.g., 'ucl'): Custom dataset configuration, loading labels from a specified text file.
 
 2. **Model Interface**:
    ```python
@@ -134,7 +138,7 @@ graph LR
    ```
    
    The training process uses MIT sequences (train_loader) and Harvard-Subset1 (val_loader).
-   Final evaluation uses Harvard-Subset2 (test_loader).
+   Final evaluation uses the test set specified by `EVAL_TEST_SET` in `config.py` (1: Harvard-Subset2, 2: UCL).
 
 ## Pipeline B: RGB to Depth to Classification
 
@@ -179,15 +183,15 @@ graph LR
 
 ## Cross-Cutting Concerns
 
-1. **Configuration Management**: Centralized in `config.py` (defining data paths, model parameters, training settings) with command-line overrides for key parameters like `model_type` and `k`. Referenced by both training and evaluation scripts for consistency.
+1. **Configuration Management**: Fully centralized in `config.py`. All scripts (`train.py`, `evaluate.py`, `visualize_test_predictions.py`, `dataset.py`) read their parameters directly from this file. No command-line arguments are used.
 2. **Logging**: TensorBoard for training metrics, matplotlib for visualizations
 3. **Error Handling**: Robust handling of invalid depths, empty point clouds
 4. **Performance Monitoring**: Tracking of inference time, memory usage
 5. **Evaluation Framework**: Consistent metrics across pipelines for fair comparison
 6. **Dataset Split Management**:
-   - Training: MIT sequences (~290 frames)
-   - Validation: Stratified random subset of Harvard sequences (48 frames)
-   - Test Set 1: Remaining stratified random subset of Harvard sequences (50 frames)
-   - Test Set 2: RealSense sequence (max 50 frames, to be collected)
+   - Training: MIT sequences (~290 frames).
+   - Validation: Stratified random subset of Harvard sequences (48 frames).
+   - Test Set 1: Remaining stratified random subset of Harvard sequences (50 frames).
+   - Test Set 2: Custom 'ucl' dataset (RealSense capture, defined in `UCL_DATA_CONFIG` in `config.py`).
    - Validation set used during training for monitoring and model selection.
-   - Test Set 1 used for final, unbiased performance evaluation.
+   - Test Sets 1 or 2 used for final evaluation via `evaluate.py` (controlled by `EVAL_TEST_SET` in `config.py`).

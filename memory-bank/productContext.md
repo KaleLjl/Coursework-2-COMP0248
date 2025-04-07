@@ -56,8 +56,8 @@ The project operates within these constraints:
    - Training: MIT sequences (290 frames)
    - Validation: Stratified random subset of Harvard sequences (48 frames)
    - Test Set 1: Remaining stratified random subset of Harvard sequences (50 frames)
-   - Test Set 2: RealSense sequence (max 50 frames, to be collected)
-   - This split allows for validation during training while maintaining an unseen test set (Test Set 1).
+   - Test Set 2: Custom 'ucl' dataset (RealSense capture, size varies)
+   - This split allows for validation during training while maintaining unseen test sets (Test Set 1 and Test Set 2) for final evaluation.
 2. **Academic Context**: Focusing on methodology and evaluation rather than production-ready implementation
 3. **Specific Table Definition**: Only certain furniture types (table top, dining table, desk, coffee table) are considered tables
 4. **Fixed Evaluation Framework**: Must adhere to the coursework evaluation metrics and reporting format

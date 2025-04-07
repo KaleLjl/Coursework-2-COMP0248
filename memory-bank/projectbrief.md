@@ -29,7 +29,7 @@ The project excludes cabinets and kitchen counters from the table class.
     - `harvard_c11 - 0000006-000000187873.jpg`
     - `mit_lab_hj - 0001106-000044777376.jpg`
     - `mit_lab_hj - 0001326-000053659116.jpg`
-- **Depth Format**: `harvard_tea_2` contains raw depth maps; other sequences use pre-processed DepthTSDF maps.
+- **Depth Format**: `harvard_tea_2` contains raw depth maps (`uint16`, likely mm); other sequences use pre-processed DepthTSDF maps (`float32`, likely meters). The custom 'ucl' dataset also uses raw depth.
 
 ## Data Split Strategy
 
@@ -42,7 +42,7 @@ To enable model selection and hyperparameter tuning while preserving an unseen t
 - **Training Data**: MIT sequences (`mit_32_d507`, `mit_76_459`, `mit_76_studyroom`, `mit_gym_z_squash`, `mit_lab_hj`) - 290 frames.
 - **Validation Data**: A stratified random subset of 48 frames from the Harvard sequences. Used during training for monitoring performance and guiding decisions (e.g., early stopping, model saving).
 - **Test Data 1**: The remaining stratified random subset of 50 frames from the Harvard sequences. Used for final evaluation after training is complete.
-- **Test Data 2**: RealSense sequence (max 50 RGBD frames) - To be collected and used for final evaluation.
+- **Test Data 2**: Custom 'ucl' dataset (RealSense capture) - Used for final evaluation (defined by `UCL_DATA_CONFIG` in `config.py`).
 
 ## Tasks
 1. **Binary Classification**: Determine if there's a table in the image

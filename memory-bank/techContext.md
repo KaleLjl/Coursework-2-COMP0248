@@ -102,7 +102,7 @@ The data is split as follows:
 - **Training**: MIT sequences (~290 frames)
 - **Validation**: Stratified random subset of Harvard sequences (48 frames)
 - **Test Set 1**: Remaining stratified random subset of Harvard sequences (50 frames)
-- **Test Set 2**: RealSense sequence (max 50 frames, to be collected)
+- **Test Set 2**: Custom 'ucl' dataset (RealSense capture, defined by `UCL_DATA_CONFIG` in `config.py`)
 
 The data is organized by location:
 ```
@@ -118,51 +118,77 @@ data/
 │   ├── harvard_c6/
 │   ├── harvard_c11/
 │   └── harvard_tea_2/    # Negative samples, raw depth
-└── RealSense/
-    └── [custom captured data]
+└── ucl/                  # Custom dataset (Test Set 2)
+    ├── depth/            # Raw depth (uint16)
+    ├── image/
+    ├── intrinsics.txt
+    └── labels/
+        └── ucl_labels.txt # Custom text labels
 ```
-Validation and Test Set 1 frames are drawn from the Harvard sequences based on pre-generated frame lists (`validation_frames.pkl`, `test_frames.pkl`).
+Validation and Test Set 1 frames are drawn from the Harvard sequences based on pre-generated frame lists (`validation_frames.pkl`, `test_frames.pkl`). Test Set 2 ('ucl') uses its own structure and label file.
 
 ### Data Characteristics and Notes
-- **Depth Format**: `harvard_tea_2` uses raw depth (likely mm), others use processed DepthTSDF (likely meters). Handled in `dataset.py`.
-- **Negative Samples**: `mit_gym_z_squash` and `harvard_tea_2` contain no tables.
+- **Depth Format**: `harvard_tea_2` and the custom 'ucl' dataset use raw depth (`uint16`, likely mm), others use processed DepthTSDF (`float32`, likely meters). Handled in `dataset.py`.
+- **Negative Samples**: `mit_gym_z_squash` and `harvard_tea_2` contain no tables. Labels for 'ucl' are defined in `ucl_labels.txt`.
 - **Missing Labels**: Specific frames in `76-1studyroom2`, `mit_32_d507`, `harvard_c11`, `mit_lab_hj` are noted in `CW2.pdf` as potentially missing table labels. This is handled by the current label loading logic (frames without labels are treated as negative).
 
 ### Data Loading Pipeline
 
 The `TableDataset` class in `dataset.py` handles loading:
-- It accepts a `data_spec` argument:
-    - For training: A dictionary mapping sequence names to sub-sequences (`TRAIN_SEQUENCES` from `config.py`).
-    - For validation/testing: A list of specific frame identifiers (`VALIDATION_FRAMES` or `TEST_FRAMES` loaded from pickle files in `config.py`).
-- It scans the relevant sequences based on `data_spec`.
-- It loads depth, (optionally) RGB, intrinsics, and label data (`tabletop_labels.dat`).
-- It determines the binary label (0/1) based on the presence of table polygons.
+- It accepts a `data_spec` argument which determines the loading strategy:
+    - **Training (`dict` starting with 'mit_'/'harvard_'):** Loads standard MIT/Harvard sequences based on `TRAIN_SEQUENCES` from `config.py`. Labels are derived from `tabletop_labels.dat`.
+    - **Validation/Test Set 1 (`list`):** Loads specific frames based on `VALIDATION_FRAMES` or `TEST_FRAMES` lists from `config.py`. Labels are derived from the original `tabletop_labels.dat` of the corresponding frames.
+    - **Test Set 2 ('ucl') (`dict` with 'name'='ucl'):** Loads data based on `UCL_DATA_CONFIG` from `config.py`. It scans the specified `base_path` for depth/image files and loads binary labels from the specified text `label_file`. Assumes raw depth format.
+- It scans the relevant sequences or directories based on `data_spec`.
+- It loads depth, (optionally) RGB, and intrinsics.
+- It determines the binary label (0/1) based on the source (`tabletop_labels.dat` or custom text file).
 - If `data_spec` is a list, it filters the loaded samples to include only those matching the specified frame identifiers.
-- It converts depth to point clouds and applies preprocessing/augmentation.
+- It converts depth to point clouds (handling raw vs. TSDF) and applies preprocessing/augmentation.
 
 ```mermaid
 graph TD
-    subgraph Data Loading
+    subgraph Data Loading Pipeline
         direction LR
-        DSpec[Data Specification (Dict or List)] --> DC[Dataset Class (TableDataset)]
-        DC --> Scan[Scan Relevant Sequences]
-        Scan --> Load[Load Frames (Depth, RGB, Labels, Intrinsics)]
-        Load --> Filter{Filter by Frame List?}
-        Filter -- Yes --> SamplesValTest[Filtered Samples (Val/Test)]
-        Filter -- No --> SamplesTrain[All Scanned Samples (Train)]
+        DSpec[Data Specification (Dict:Train/UCL(Test2), List:Val/Test1)] --> DC[TableDataset Class]
+
+        subgraph Loading Logic based on DSpec Type
+            DSpec -- Dict (Train) --> ScanSeq[Scan MIT/Harvard Sequences]
+            ScanSeq --> LoadStd[Load Frames (Depth, RGB, Intrinsics, Labels.dat)]
+            LoadStd --> SamplesTrain[All Scanned Samples]
+
+            DSpec -- List (Val/Test1) --> ScanSeqList[Scan Relevant Harvard Sequences]
+            ScanSeqList --> LoadStdList[Load Frames (Depth, RGB, Intrinsics, Labels.dat)]
+            LoadStdList --> FilterList[Filter by Frame List]
+            FilterList --> SamplesValTest1[Filtered Samples (Val/Test1)]
+
+            DSpec -- Dict (UCL) --> ScanUCL[Scan UCL Directory]
+            ScanUCL --> LoadUCL[Load Frames (Depth, RGB, Intrinsics, ucl_labels.txt)]
+            LoadUCL --> SamplesUCL[All UCL Samples (Test2)]
+        end
+
         SamplesTrain --> Process[Process Sample (PC Gen, Preproc, Aug)]
-        SamplesValTest --> Process
+        SamplesValTest1 --> Process
+        SamplesUCL --> Process
         Process --> Output[Loader Output (Points, Label, Metadata)]
     end
 ```
 
 ## Configuration System
 
-The system uses a centralized configuration approach:
+The system uses a **fully centralized configuration** approach:
 
-1. **Base Configuration**: Default parameters defined in `config.py`
-2. **Command-Line Override**: Arguments passed via CLI take precedence
-3. **Run-Specific Configuration**: Stored with model checkpoints for reproducibility
+1. **Single Source of Truth**: All configuration parameters are defined in `src/pipelineA/config.py`. This includes:
+    - Data paths (`BASE_DATA_DIR`, dataset specs like `TRAIN_SEQUENCES`, `VALIDATION_FRAMES`, `TEST_FRAMES`, `UCL_DATA_CONFIG`).
+    - Point cloud processing parameters (`POINT_CLOUD_PARAMS`).
+    - Model architecture parameters (`MODEL_PARAMS`).
+    - Training hyperparameters (`TRAIN_PARAMS`).
+    - Data augmentation settings (`AUGMENTATION_PARAMS`).
+    - General settings (`SEED`, `DEVICE`, `NUM_WORKERS`, `EXP_NAME`, `AUGMENT`).
+    - Evaluation settings (`EVAL_*` variables like `EVAL_CHECKPOINT`, `EVAL_TEST_SET`, `EVAL_BATCH_SIZE`, etc.).
+    - Visualization settings (`VIS_*` variables like `VIS_OUTPUT_DIR`).
+    - Output paths (`WEIGHTS_DIR`, `RESULTS_DIR`, `LOGS_DIR`).
+2. **No Command-Line Arguments**: Scripts (`train.py`, `evaluate.py`, `visualize_test_predictions.py`) no longer accept or parse command-line arguments. They import necessary parameters directly from `config.py`.
+3. **Run-Specific Configuration**: While not explicitly stored *in* the checkpoint file itself, the configuration used for a specific run can be inferred from the timestamped checkpoint/log directory names and the state of `config.py` at the time of the run (requires version control).
 
 ## Deployment & Evaluation
 
