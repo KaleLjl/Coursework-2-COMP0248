@@ -3,8 +3,9 @@
 ## Development Environment
 
 **Activation:** Always activate the Python virtual environment before running any scripts to ensure correct dependencies are used. On Linux/macOS, use:
+
 ```bash
-source .venv/bin/activate 
+source .venv/bin/activate
 ```
 
 The project is developed in a Python environment with the following requirements:
@@ -51,23 +52,23 @@ def depth_to_pointcloud(depth_map, intrinsics):
     # Create meshgrid of pixel coordinates
     h, w = depth_map.shape
     x, y = np.meshgrid(np.arange(w), np.arange(h))
-    
+
     # Convert to homogeneous coordinates
     x = (x - intrinsics[0, 2]) / intrinsics[0, 0]
     y = (y - intrinsics[1, 2]) / intrinsics[1, 1]
-    
+
     # Multiply by depth to get 3D coordinates
     z = depth_map
     x = x * z
     y = y * z
-    
+
     # Stack to create point cloud
     points = np.stack((x, y, z), axis=-1)
-    
+
     # Reshape and filter invalid points
     points = points.reshape(-1, 3)
     valid_mask = z.reshape(-1) > 0
-    
+
     return points[valid_mask]
 ```
 
@@ -85,6 +86,7 @@ Point clouds undergo several preprocessing steps:
 The project supports two main architectures for point cloud classification:
 
 1. **DGCNN (Dynamic Graph CNN)**:
+
    - Constructs dynamic graphs in feature space
    - Uses EdgeConv operations for better geometric understanding
    - More robust to point cloud variations
@@ -96,16 +98,19 @@ The project supports two main architectures for point cloud classification:
 
 ## Data Management
 
-### Dataset Split and Organization (Under Review 2025-04-07)
+### Dataset Split and Organization (Final)
 
-Two splits have been used:
-- **Original Split**: Training: MIT (~290). Validation: Harvard-Subset1 (48). Test Set 1: Harvard-Subset2 (50).
-- **Domain Adaptation Split**: Training: MIT + `harvard_tea_2` (~305). Validation: Harvard-Subset1 excl. `harvard_tea_2` (24). Test Set 1: Harvard-Subset2 excl. `harvard_tea_2` (50).
+The final data split strategy employed is the **Original Split**:
+
+- **Training Set**: All MIT sequences (~290 frames).
+- **Validation Set**: Stratified random subset of Harvard sequences (48 frames).
+- **Test Set 1**: Remaining stratified random subset of Harvard sequences (50 frames).
 - **Test Set 2 (Consistent)**: Custom 'ucl' dataset (RealSense capture, raw depth).
 
-The final split strategy is TBD pending class balance investigation of the Domain Adaptation training set.
+The Domain Adaptation split attempt was abandoned.
 
 The data is organized by location:
+
 ```
 data/
 ├── MIT/
@@ -126,9 +131,11 @@ data/
     └── labels/
         └── ucl_labels.txt # Custom text labels
 ```
+
 Validation and Test Set 1 frames are drawn from the relevant Harvard pool based on the split strategy being used, using frame lists (`validation_frames.pkl`, `test_frames.pkl`). Test Set 2 ('ucl') uses its own structure and label file.
 
 ### Data Characteristics and Notes
+
 - **Depth Format**: `harvard_tea_2` and the custom 'ucl' dataset use raw depth (`uint16`, likely mm), others use processed DepthTSDF (`float32`, likely meters). Handled in `dataset.py`. The domain adaptation split included `harvard_tea_2` in training.
 - **Negative Samples**: `mit_gym_z_squash` and `harvard_tea_2` contain no tables. Labels for 'ucl' are defined in `ucl_labels.txt`.
 - **Missing Labels**: Specific frames in `76-1studyroom2`, `mit_32_d507`, `harvard_c11`, `mit_lab_hj` are noted in `CW2.pdf` as potentially missing table labels. This is handled by the current label loading logic (frames without labels are treated as negative).
@@ -136,10 +143,11 @@ Validation and Test Set 1 frames are drawn from the relevant Harvard pool based 
 ### Data Loading Pipeline (As of 2025-04-07)
 
 The `TableDataset` class in `dataset.py` handles loading:
+
 - It accepts a `data_spec` argument which determines the loading strategy:
-    - **Training (`dict` starting with 'mit_'/'harvard_'):** Loads sequences based on `TRAIN_SEQUENCES` from `config.py`. The content of `TRAIN_SEQUENCES` depends on the split strategy being used (Original vs. Domain Adaptation). Labels are derived from `tabletop_labels.dat`.
-    - **Validation/Test Set 1 (`list`):** Loads specific frames based on `VALIDATION_FRAMES` or `TEST_FRAMES` lists from `config.py`. The content of these lists depends on the split strategy being used. Labels are derived from the original `tabletop_labels.dat` of the corresponding frames.
-    - **Test Set 2 ('ucl') (`dict` with 'name'='ucl'):** Loads data based on `UCL_DATA_CONFIG` from `config.py`. It scans the specified `base_path` for depth/image files and loads binary labels from the specified text `label_file`. Assumes raw depth format.
+  - **Training (`dict` starting with 'mit*'/'harvard*'):** Loads sequences based on `TRAIN_SEQUENCES` from `config.py`. The content of `TRAIN_SEQUENCES` depends on the split strategy being used (Original vs. Domain Adaptation). Labels are derived from `tabletop_labels.dat`.
+  - **Validation/Test Set 1 (`list`):** Loads specific frames based on `VALIDATION_FRAMES` or `TEST_FRAMES` lists from `config.py`. The content of these lists depends on the split strategy being used. Labels are derived from the original `tabletop_labels.dat` of the corresponding frames.
+  - **Test Set 2 ('ucl') (`dict` with 'name'='ucl'):** Loads data based on `UCL_DATA_CONFIG` from `config.py`. It scans the specified `base_path` for depth/image files and loads binary labels from the specified text `label_file`. Assumes raw depth format.
 - It scans the relevant sequences or directories based on `data_spec`.
 - It loads depth, (optionally) RGB, and intrinsics.
 - It determines the binary label (0/1) based on the source (`tabletop_labels.dat` or custom text file).
@@ -179,23 +187,24 @@ graph TD
 The system uses a **fully centralized configuration** approach:
 
 1. **Single Source of Truth**: All configuration parameters are defined in `src/pipelineA/config.py`. This includes:
-    - Data paths (`BASE_DATA_DIR`, dataset specs like `TRAIN_SEQUENCES`, `VALIDATION_FRAMES`, `TEST_FRAMES`, `UCL_DATA_CONFIG`).
-    - Point cloud processing parameters (`POINT_CLOUD_PARAMS`).
-    - Model architecture parameters (`MODEL_PARAMS`).
-    - Training hyperparameters (`TRAIN_PARAMS`).
-    - Data augmentation settings (`AUGMENTATION_PARAMS`).
-    - General settings (`SEED`, `DEVICE`, `NUM_WORKERS`, `EXP_NAME`, `AUGMENT`).
-    - Evaluation settings (`EVAL_*` variables like `EVAL_CHECKPOINT`, `EVAL_TEST_SET`, `EVAL_BATCH_SIZE`, etc.).
-    - Visualization settings (`VIS_*` variables like `VIS_OUTPUT_DIR`).
-    - Output paths (`WEIGHTS_DIR`, `RESULTS_DIR`, `LOGS_DIR`).
+   - Data paths (`BASE_DATA_DIR`, dataset specs like `TRAIN_SEQUENCES`, `VALIDATION_FRAMES`, `TEST_FRAMES`, `UCL_DATA_CONFIG`).
+   - Point cloud processing parameters (`POINT_CLOUD_PARAMS`).
+   - Model architecture parameters (`MODEL_PARAMS`).
+   - Training hyperparameters (`TRAIN_PARAMS`).
+   - Data augmentation settings (`AUGMENTATION_PARAMS`).
+   - General settings (`SEED`, `DEVICE`, `NUM_WORKERS`, `EXP_NAME`, `AUGMENT`).
+   - Evaluation settings (`EVAL_*` variables like `EVAL_CHECKPOINT`, `EVAL_TEST_SET`, `EVAL_BATCH_SIZE`, etc.).
+   - Visualization settings (`VIS_*` variables like `VIS_OUTPUT_DIR`).
+   - Output paths (`WEIGHTS_DIR`, `RESULTS_DIR`, `LOGS_DIR`).
 2. **No Command-Line Arguments**: Scripts (`train.py`, `evaluate.py`, `visualize_test_predictions.py`) no longer accept or parse command-line arguments. They import necessary parameters directly from `config.py`.
-3. **Run-Specific Configuration**: While not explicitly stored *in* the checkpoint file itself, the configuration used for a specific run can be inferred from the timestamped checkpoint/log directory names and the state of `config.py` at the time of the run (requires version control).
+3. **Run-Specific Configuration**: While not explicitly stored _in_ the checkpoint file itself, the configuration used for a specific run can be inferred from the timestamped checkpoint/log directory names and the state of `config.py` at the time of the run (requires version control).
 
 ## Deployment & Evaluation
 
 ### Model Checkpointing
 
 Models are saved during training with the following information:
+
 - Model weights
 - Training configuration with dataset split information
 - Optimization state
@@ -205,6 +214,7 @@ Models are saved during training with the following information:
 ### Visualization
 
 Results are visualized through:
+
 - 3D interactive point cloud visualizations
 - Confusion matrices for classification results
 - PR and ROC curves for model performance
@@ -213,6 +223,7 @@ Results are visualized through:
 ### Metrics Tracking
 
 The system tracks key metrics:
+
 - Accuracy
 - Precision
 - Recall
@@ -222,13 +233,11 @@ The system tracks key metrics:
 - Train/validation divergence metrics
 - Generalization gap metrics
 
-### Enhanced Regularization
+### Regularization in Final Model
 
-To address overfitting and ensure generalization to the Harvard validation set, the system implements:
+The final model (`dgcnn_20250407_174719`) primarily utilized the following techniques to mitigate overfitting observed in baseline runs:
 
-1. **Aggressive Dropout**: Increased from 0.5 to 0.7
-2. **Feature-Level Dropout**: Additional 0.2 dropout in feature maps
-3. **Weight Decay**: Increased from 1e-4 to 5e-4
-4. **Gradient Clipping**: Prevents extreme weight updates
-5. **Enhanced Data Augmentation**: More aggressive rotations, jitter, and point dropout
-6. **Point Dropout**: Simulates occlusion in point clouds
+1. **Dropout**: A dropout rate of 0.5 was applied before the final classification layers in the DGCNN model. Experiments showed this rate offered the best performance compared to lower rates or no dropout.
+2. **Data Augmentation**: Standard augmentations (random rotation, scaling, jitter) were applied during training to increase data variability.
+
+Other techniques like increased weight decay, feature-level dropout, and gradient clipping were explored but found to be detrimental or less effective than the chosen dropout rate for the final configuration.

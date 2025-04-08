@@ -114,11 +114,11 @@ UCL_DATA_CONFIG = {
 
 # Evaluation Parameters (used by evaluate.py and visualize_test_predictions.py)
 # Updated EVAL_CHECKPOINT to the best model from the latest Exp 1 re-run (trained on MIT only)
-EVAL_CHECKPOINT = str(PROJECT_ROOT / "weights" / "pipelineA" / "dgcnn_20250407_174719" / "model_best.pt")
+EVAL_CHECKPOINT = str(PROJECT_ROOT / "weights" / "pipelineA" / "dgcnn_20250407_193904" / "model_best.pt")
 # Specifies the test set to use for evaluation and visualization.
 # 1: Harvard subset (defined by TEST_FRAMES loaded from test_frames.pkl - original 50 frames)
 # 2: UCL custom dataset (RealSense capture, defined by UCL_DATA_CONFIG)
-EVAL_TEST_SET = 1 # Set to Harvard subset (Test Set 1) for overfitting analysis
+EVAL_TEST_SET = 2 # Set to Harvard subset (Test Set 1) for overfitting analysis
 EVAL_MODEL_TYPE = MODEL_PARAMS['model_type'] # Use model type from MODEL_PARAMS
 EVAL_K = MODEL_PARAMS.get('k', 20)           # Use k from MODEL_PARAMS
 EVAL_BATCH_SIZE = TRAIN_PARAMS['batch_size'] # Default to training batch size

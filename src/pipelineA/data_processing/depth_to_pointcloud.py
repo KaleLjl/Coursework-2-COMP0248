@@ -11,76 +11,92 @@ def read_intrinsics(intrinsics_path):
         intrinsics_path (str): Path to the intrinsics file
         
     Returns:
-        tuple: (fx, fy, cx, cy) camera intrinsics parameters
+        tuple: (fx, fy, cx, cy) camera intrinsics parameters, or (None, None, None, None) if parsing fails
     """
-    with open(intrinsics_path, 'r') as f:
-        lines = f.readlines()
-    
-    # Parse the intrinsics matrix
-    line1 = lines[0].strip().split()
-    line2 = lines[1].strip().split()
-    
-    fx = float(line1[0])
-    fy = float(line2[1])
-    cx = float(line1[2])
-    cy = float(line2[2])
-    
-    return fx, fy, cx, cy
+    try:
+        with open(intrinsics_path, 'r') as f:
+            lines = [line.strip() for line in f if line.strip()] # Read non-empty lines
 
-def load_depth_map(depth_path, use_raw_depth=False):
-    """Load a depth map from file.
-    
+        if len(lines) != 3:
+            print(f"Error: Expected 3 lines in intrinsics file {intrinsics_path}, found {len(lines)}. Cannot parse.")
+            return None, None, None, None # Indicate failure
+
+        # Parse the 3x3 matrix K = [[fx, 0, cx], [0, fy, cy], [0, 0, 1]]
+        line1_parts = lines[0].split()
+        line2_parts = lines[1].split()
+        # line3_parts = lines[2].split() # Don't need the third line [0, 0, 1]
+
+        if len(line1_parts) != 3 or len(line2_parts) != 3:
+             print(f"Error: Expected 3 values per line in first two lines of intrinsics file {intrinsics_path}. Cannot parse.")
+             return None, None, None, None # Indicate failure
+
+        # Check if the matrix format looks correct (0s in expected places)
+        if float(line1_parts[1]) != 0 or float(line2_parts[0]) != 0:
+             print(f"Warning: Unexpected non-zero values in intrinsics matrix format in {intrinsics_path}.")
+             # Proceed anyway, but this might indicate an issue
+
+        fx = float(line1_parts[0])
+        cx = float(line1_parts[2])
+        fy = float(line2_parts[1])
+        cy = float(line2_parts[2])
+
+        return fx, fy, cx, cy
+    except Exception as e:
+        print(f"Error reading or parsing intrinsics file {intrinsics_path}: {e}")
+        return None, None, None, None # Indicate failure
+
+
+def load_depth_map(depth_path): # Removed use_raw_depth argument
+    """Load a depth map from file and scale if necessary.
+
+    Assumes uint16 depth maps are in millimeters and converts them to meters.
+    Assumes float32 depth maps (e.g., from .npy) are already in meters.
+
     Args:
         depth_path (str): Path to the depth map file
-        use_raw_depth (bool): If True, use raw depth, otherwise use depthTSDF
-        
+
     Returns:
-        numpy.ndarray: Depth map as a 2D array
+        numpy.ndarray: Depth map as a 2D float32 array (in meters)
     """
     # Get file extension
     extension = os.path.splitext(depth_path)[1].lower()
-    
-    # For raw depth maps (harvard_tea_2)
-    if use_raw_depth:
+    depth_map = None
+    original_dtype = None
+
+    try:
         if extension in ['.png', '.jpg', '.jpeg']:
-            depth_map_raw = cv2.imread(depth_path, cv2.IMREAD_ANYDEPTH)
-            if depth_map_raw is None:
-                 print(f"Error: Failed to read raw depth image {depth_path}")
-                 depth_map = np.zeros((480, 640), dtype=np.float32)
-            else:
-                 # Removed the debug print statement
-                 # Usually raw depth is in millimeters, convert to meters
-                 depth_map = depth_map_raw.astype(np.float32) / 1000.0
-        else: # Corrected indentation level
-            # Try to load as numpy array
-            try:
-                depth_map = np.load(depth_path)
-            except Exception as e:
-                print(f"Error loading raw depth file {depth_path}: {e}")
-                depth_map = np.zeros((480, 640), dtype=np.float32)
-    # For TSDF processed depth maps
-    else:
-        if extension == '.npy':
-            depth_map = np.load(depth_path)
-        elif extension == '.png':
-            # Some datasets might store depth as PNG
-            depth_map = cv2.imread(depth_path, cv2.IMREAD_ANYDEPTH)
-            depth_map = depth_map.astype(np.float32) / 1000.0
+            # Load image using OpenCV, preserving original bit depth
+            img = cv2.imread(str(depth_path), cv2.IMREAD_ANYDEPTH | cv2.IMREAD_ANYCOLOR)
+            if img is None:
+                raise ValueError("cv2.imread failed")
+            original_dtype = img.dtype
+            depth_map = img.astype(np.float32) # Convert to float for processing
+
+        elif extension == '.npy':
+            # Load numpy array
+            depth_map = np.load(str(depth_path))
+            original_dtype = depth_map.dtype
+            depth_map = depth_map.astype(np.float32) # Ensure float for processing
         else:
-            # Try different approaches
-            try:
-                # Try to load as numpy binary
-                depth_map = np.load(depth_path)
-            except Exception:
-                try:
-                    # Try to load as image
-                    depth_map = cv2.imread(depth_path, cv2.IMREAD_ANYDEPTH)
-                    depth_map = depth_map.astype(np.float32) / 1000.0
-                except Exception as e:
-                    print(f"Error loading depth file {depth_path}: {e}")
-                    depth_map = np.zeros((480, 640), dtype=np.float32)
-    
+            raise ValueError(f"Unsupported depth file extension: {extension}")
+
+        # Scale if the original data was uint16 (assumed millimeters based on analysis)
+        if original_dtype == np.uint16:
+            # print(f"Debug: Scaling uint16 depth map {depth_path} by 1000.0") # Optional debug
+            depth_map /= 1000.0
+        elif original_dtype != np.float32:
+             # If it's not uint16 or float32, we might not know the scale
+             print(f"Warning: Loaded depth map {depth_path} with unexpected dtype {original_dtype}. Assuming meters.")
+
+
+    except Exception as e:
+        print(f"Error loading depth file {depth_path}: {e}")
+        # Return a zero array on error to avoid downstream issues immediately
+        # Note: This might mask loading errors if not monitored.
+        depth_map = np.zeros((480, 640), dtype=np.float32) # Assuming default size
+
     return depth_map
+
 
 def depth_to_pointcloud(depth_map, fx, fy, cx, cy, min_depth=0.1, max_depth=10.0, depth_path=None):
     """Convert depth map to point cloud.
@@ -108,22 +124,14 @@ def depth_to_pointcloud(depth_map, fx, fy, cx, cy, min_depth=0.1, max_depth=10.0
     
     # Check if we have any valid depth values
     if np.sum(valid_mask) == 0:
-        # Return a small dummy point cloud instead of an empty one
-        # Create a 3x3x3 grid of points centered at origin
-        dummy_size = 3
-        x = np.linspace(-1, 1, dummy_size)
-        y = np.linspace(-1, 1, dummy_size)
-        z = np.linspace(-1, 1, dummy_size)
-        xv, yv, zv = np.meshgrid(x, y, z)
-        points = np.stack([xv.flatten(), yv.flatten(), zv.flatten()], axis=1)
         warning_msg = f"Warning: No valid depth values in depth map"
         if depth_path:
-            # Print the full path instead of just the basename
-            warning_msg += f" ({str(depth_path)})" 
-        warning_msg += f". Created dummy point cloud with {points.shape[0]} points."
+            warning_msg += f" ({str(depth_path)})"
+        warning_msg += f". Returning empty point cloud."
         print(warning_msg)
-        return points
-    
+        # Return an empty array instead of a dummy cloud
+        return np.empty((0, 3), dtype=np.float32)
+
     # Get valid coordinates and depths
     valid_u = u[valid_mask]
     valid_v = v[valid_mask]
@@ -142,26 +150,30 @@ def depth_to_pointcloud(depth_map, fx, fy, cx, cy, min_depth=0.1, max_depth=10.0
 def create_pointcloud_from_depth(depth_path, intrinsics_path, use_raw_depth=False, 
                                 min_depth=0.1, max_depth=10.0):
     """Create point cloud from depth map using camera intrinsics.
-    
+
     Args:
         depth_path (str): Path to the depth map file
         intrinsics_path (str): Path to the intrinsics file
-        use_raw_depth (bool): If True, use raw depth, otherwise use depthTSDF
         min_depth (float): Minimum valid depth value
         max_depth (float): Maximum valid depth value
-        
+
     Returns:
-        numpy.ndarray: Point cloud as Nx3 array of (x, y, z) coordinates
+        numpy.ndarray: Point cloud as Nx3 array of (x, y, z) coordinates, or empty array if intrinsics are invalid
     """
     # Read intrinsics
     fx, fy, cx, cy = read_intrinsics(intrinsics_path)
-    
-    # Load depth map
-    depth_map = load_depth_map(depth_path, use_raw_depth)
-    
+
+    # Check if intrinsics were read successfully
+    if fx is None:
+        print(f"Error: Invalid intrinsics for {depth_path}. Cannot create point cloud.")
+        return np.empty((0, 3), dtype=np.float32) # Return empty array
+
+    # Load depth map (now always scaled if originally uint16)
+    depth_map = load_depth_map(depth_path)
+
     # Convert to point cloud, passing the path for logging
     points = depth_to_pointcloud(depth_map, fx, fy, cx, cy, min_depth, max_depth, depth_path=depth_path)
-    
+
     return points
 
 def visualize_pointcloud(points, colors=None):
@@ -184,24 +196,28 @@ def visualize_pointcloud(points, colors=None):
 def create_rgbd_pointcloud(depth_path, image_path, intrinsics_path, use_raw_depth=False, 
                           min_depth=0.1, max_depth=10.0):
     """Create colored point cloud from depth map and RGB image.
-    
+
     Args:
         depth_path (str): Path to the depth map file
         image_path (str): Path to the RGB image file
         intrinsics_path (str): Path to the intrinsics file
-        use_raw_depth (bool): If True, use raw depth, otherwise use depthTSDF
         min_depth (float): Minimum valid depth value
         max_depth (float): Maximum valid depth value
-        
+
     Returns:
-        tuple: (points, colors) where points is a Nx3 array and colors is a Nx3 array
+        tuple: (points, colors) where points is a Nx3 array and colors is a Nx3 array, or (empty_array, empty_array) if intrinsics are invalid or no valid depth.
     """
     # Read intrinsics
     fx, fy, cx, cy = read_intrinsics(intrinsics_path)
-    
-    # Load depth map
-    depth_map = load_depth_map(depth_path, use_raw_depth)
-    
+
+    # Check if intrinsics were read successfully
+    if fx is None:
+        print(f"Error: Invalid intrinsics for {depth_path}. Cannot create RGBD point cloud.")
+        return np.empty((0, 3), dtype=np.float32), np.empty((0, 3), dtype=np.float32)
+
+    # Load depth map (now always scaled if originally uint16)
+    depth_map = load_depth_map(depth_path)
+
     # Load RGB image
     rgb_image = cv2.imread(image_path)
     rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB)
@@ -221,20 +237,14 @@ def create_rgbd_pointcloud(depth_path, image_path, intrinsics_path, use_raw_dept
     
     # Check if we have any valid depth values
     if np.sum(valid_mask) == 0:
-        # Return a small dummy point cloud instead of an empty one
-        # Create a 3x3x3 grid of points centered at origin
-        dummy_size = 3
-        x = np.linspace(-1, 1, dummy_size)
-        y = np.linspace(-1, 1, dummy_size)
-        z = np.linspace(-1, 1, dummy_size)
-        xv, yv, zv = np.meshgrid(x, y, z)
-        points = np.stack([xv.flatten(), yv.flatten(), zv.flatten()], axis=1)
-        # Create random colors for the dummy points
-        colors = np.random.random((points.shape[0], 3))
-        # Include full path in the warning
-        print(f"Warning: No valid depth values in depth map ({str(depth_path)}). Created dummy point cloud with {points.shape[0]} points.")
-        return points, colors
-    
+        warning_msg = f"Warning: No valid depth values in depth map"
+        if depth_path:
+            warning_msg += f" ({str(depth_path)})"
+        warning_msg += f". Returning empty RGBD point cloud."
+        print(warning_msg)
+        # Return empty arrays instead of a dummy cloud
+        return np.empty((0, 3), dtype=np.float32), np.empty((0, 3), dtype=np.float32)
+
     # Get valid coordinates and depths
     valid_u = u[valid_mask]
     valid_v = v[valid_mask]
