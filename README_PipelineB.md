@@ -37,8 +37,8 @@ src/pipelineB/
 
 ## Configuration
 - **Data processing parameters**: Set to True in `MiDaS_depth_model.py` or `read_labels.py` to generate depth estimations or label.csv for the corresponding dataset.
-  - `PROCESS_TRAIN`: Training dataset (MIT), default: False
-  - `PROCESS_TEST1`: Validation dataset (Harvard), default: False
+  - `PROCESS_TRAIN`: Training dataset (MIT), default: True
+  - `PROCESS_TEST1`: Validation dataset (Harvard), default: True
   - `PROCESS_TEST2`: Testing dataset (UCL), default: True
 - **Training parameters**: 
   - `IF_PRETRAIN`: Batch size for training (default: True)

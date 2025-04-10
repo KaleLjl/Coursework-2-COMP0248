@@ -15,8 +15,8 @@ import csv
 
 # ========== User Control ===========
 # set True to generate the labels for the dataset
-PROCESS_TRAIN = False
-PROCESS_TEST1 = False
+PROCESS_TRAIN = True
+PROCESS_TEST1 = True
 PROCESS_TEST2 = True
 
 # ========= Outline Cases ===========
@@ -96,8 +96,8 @@ for mode, flag in zip(["Training_Data", "Test_Data_1"], [PROCESS_TRAIN, PROCESS_
 if PROCESS_TEST2:
     print("[INFO] Processing Test_Data_2 (UCL Dataset)")
 
-    label_txt_path = "data/ucl_dataset/labels/ucl_labels.txt"
-    image_dir = "data/ucl_dataset/image"
+    label_txt_path = "data/RealSense/data/ucl/labels/ucl_labels.txt"
+    image_dir = "data/RealSense/data/ucl/image"
     output_folder = os.path.join(output_base_path, "Test_Data_2", "ucl_dataset")
     os.makedirs(output_folder, exist_ok=True)
 

@@ -22,8 +22,8 @@ from tqdm import tqdm
 
 # ========== User Control ===========
 # set True to generate depth estimations for the corresponding dataset
-PROCESS_TRAIN = False  # MIT
-PROCESS_TEST1 = False # Harvard
+PROCESS_TRAIN = True  # MIT
+PROCESS_TEST1 = True # Harvard
 PROCESS_TEST2 = True # RealSense
 
 
@@ -69,7 +69,7 @@ else:
 dataset_paths = {
     "Training_Data": "data/CW2-Dataset/data/mit_*",
     "Test_Data_1": "data/CW2-Dataset/data/harvard_*",
-    "Test_Data_2": "data/ucl_dataset/image" 
+    "Test_Data_2": "data/RealSense/data/ucl/image" 
 }
 output_base_path = "data/pipelineB_data"
 
