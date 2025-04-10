@@ -1,5 +1,4 @@
 data/
-results/
 weights/ 
 environment/
 __pycache__/
