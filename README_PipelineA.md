@@ -1,4 +1,4 @@
-/cs/student/projects1/rai/2024/jialeli/# Table Detection from 3D Point Clouds - Pipeline A
+# Table Detection from 3D Point Clouds - Pipeline A
 
 ## Overview
 
@@ -7,7 +7,6 @@ Pipeline A is a computer vision system for detecting tables in 3D point clouds d
 2. Using a deep learning classifier to determine if there's a table in the scene (binary classification)
 
 ## Requirements
-/cs/student/projects1/rai/2024/jialeli/
 - Python 3.8+
 - PyTorch 1.8+
 - Open3D
@@ -93,35 +92,22 @@ Pipeline A implements two point cloud processing architectures:
 
 ### 1. Training a Model
 
-**Note:** Many training and model parameters (e.g., dropout, weight decay, embedding dimensions, learning rate schedule parameters) are now primarily controlled via `src/pipelineA/config.py`. Command-line arguments override defaults where applicable.
+**Important:** All training parameters are now controlled exclusively via `src/pipelineA/config.py`. Command-line arguments are no longer used.
 
-**General Training Command:**
+**Steps:**
 
-```bash
-python src/pipelineA/training/train.py --model_type dgcnn --num_epochs 100 --batch_size 16 --learning_rate 0.001 --augment --k 20 --seed 42 --device cuda
-```
+1.  **Configure `src/pipelineA/config.py`**:
+    *   Set `MODEL_PARAMS` (e.g., `model_type`, `k`, `emb_dims`, `dropout`).
+    *   Set `TRAIN_PARAMS` (e.g., `num_epochs`, `batch_size`, `learning_rate`, `weight_decay`).
+    *   Set `AUGMENTATION_PARAMS` (e.g., `enabled`, rotation, jitter, scale ranges).
+    *   Set general parameters like `SEED`, `DEVICE`, `NUM_WORKERS`.
+    *   Optionally set `EXP_NAME` for organizing outputs.
+2.  **Run Training**:
+    ```bash
+    python src/pipelineA/training/train.py
+    ```
 
-**Current Recommended Command ('Augmentation Only' Strategy):**
-
-This command assumes you have configured `src/pipelineA/config.py` for the 'augmentation only' strategy (e.g., `MODEL_PARAMS['dropout'] = 0.0`, `TRAIN_PARAMS['weight_decay'] = 0.0`, `AUGMENTATION_PARAMS['enabled'] = True`).
-
-```bash
-python src/pipelineA/training/train.py --model_type dgcnn --augment
-```
-*(This uses default values for epochs, batch size, learning rate, k, seed, device from `config.py` or the script's defaults, enabling only augmentation via the flag)*
-
-**Key Command-Line Training Arguments:**
-- `--model_type`: Model architecture (`dgcnn` or `pointnet`). Default: `dgcnn`.
-- `--num_epochs`: Number of training epochs. Default: From `config.py` (e.g., 50).
-- `--batch_size`: Batch size for training. Default: From `config.py` (e.g., 16).
-- `--learning_rate`: Initial learning rate. Default: From `config.py` (e.g., 0.001).
-- `--augment`: Flag to enable data augmentation (defined in `config.py`).
-- `--k`: Number of nearest neighbors for DGCNN. Default: From `config.py` (e.g., 20).
-- `--num_workers`: Number of data loading workers. Default: 4.
-- `--seed`: Random seed for reproducibility. Default: 42.
-- `--device`: Device to use (`cuda` or `cpu`). Default: `cuda`.
-
-*(Note: Arguments like `--dropout`, `--weight_decay`, `--emb_dims`, `--train_val_split` are no longer used as command-line arguments and are controlled via `config.py`)*
+Training outputs (checkpoints, logs) will be saved to directories specified in `config.py` (e.g., `WEIGHTS_DIR`, `LOGS_DIR`) under a timestamped subfolder or the `EXP_NAME` if provided.
 
 #### TensorBoard Visualization
 
@@ -159,39 +145,41 @@ Training and evaluation results are saved to:
 
 ### 2. Evaluating a Trained Model
 
-*(Note: The evaluation script might need updates to align with the current training script structure and configuration loading. The command below is based on the previous structure.)*
+**Important:** All evaluation parameters are now controlled exclusively via `src/pipelineA/config.py`. Command-line arguments are no longer used.
 
-```bash
-# Example - Check src/pipelineA/training/evaluate.py for current usage
-python src/pipelineA/training/evaluate.py --model_type dgcnn --checkpoint weights/pipelineA/dgcnn_YYYYMMDD_HHMMSS/model_best.pt
-```
+**Steps:**
 
-Key evaluation parameters (check `evaluate.py` for current arguments):
-- `--model_type`: Model architecture (must match the trained model).
-- `--checkpoint`: Path to model checkpoint file.
-- Potentially others like `--batch_size`, `--device`.
+1.  **Configure `src/pipelineA/config.py`**:
+    *   Set `EVAL_CHECKPOINT`: Path to the model checkpoint file (e.g., `weights/pipelineA/dgcnn_YYYYMMDD_HHMMSS/model_best.pt`).
+    *   Set `EVAL_TEST_SET`: Which test set to use (1 for Harvard-Subset2, 2 for UCL dataset).
+    *   Set `EVAL_BATCH_SIZE`: Batch size for evaluation.
+    *   Ensure `MODEL_PARAMS` match the configuration used for the checkpoint being evaluated.
+    *   Set `DEVICE`.
+2.  **Run Evaluation**:
+    ```bash
+    python src/pipelineA/training/evaluate.py
+    ```
+
+Evaluation results (metrics, potentially plots) will be saved to the directory specified in `config.py` (e.g., `RESULTS_DIR`).
 
 ### 3. Visualizing Test Predictions on Images
 
-To visualize the model's predictions overlaid on the corresponding RGB images for the test set:
+**Important:** All visualization parameters are now controlled exclusively via `src/pipelineA/config.py`. Command-line arguments are no longer used.
 
-```bash
-python src/pipelineA/visualize_test_predictions.py --model_path <path_to_best_model.pt>
-```
+**Steps:**
 
-**Example using the best DGCNN model from Experiment 1:**
-```bash
-python src/pipelineA/visualize_test_predictions.py --model_path weights/pipelineA/dgcnn_20250405_145031/model_best.pt
-```
+1.  **Configure `src/pipelineA/config.py`**:
+    *   Set `EVAL_CHECKPOINT`: Path to the model checkpoint file to use for visualization.
+    *   Set `EVAL_TEST_SET`: Which test set to visualize predictions for (1 for Harvard-Subset2, 2 for UCL dataset).
+    *   Set `VIS_OUTPUT_DIR`: Directory where annotated images will be saved.
+    *   Ensure `MODEL_PARAMS` match the configuration used for the checkpoint.
+    *   Set `DEVICE`, `NUM_WORKERS`.
+2.  **Run Visualization**:
+    ```bash
+    python src/pipelineA/visualize_test_predictions.py
+    ```
 
-**Key Arguments:**
-- `--model_path`: Path to the trained model checkpoint file. Default: `weights/pipelineA/dgcnn_20250405_145031/model_best.pt`.
-- `--output_dir`: Directory where annotated images will be saved. Default: `results/pipelineA/test_set_visualizations/`.
-- `--data_root`: Root directory of the dataset. Default: From `config.py`.
-- `--num_workers`: Number of data loading workers. Default: 4.
-- `--use_cuda` / `--no_cuda`: Force usage of CUDA or CPU. Default: Use CUDA if available.
-
-The script will generate images in the specified output directory, showing the RGB image annotated with "Predicted: [Label]" and "Ground Truth: [Label]". The text color indicates correctness (green for correct, red for incorrect).
+The script will generate images in the specified `VIS_OUTPUT_DIR`, showing the RGB image annotated with "Predicted: [Label]" and "Ground Truth: [Label]". The text color indicates correctness (green for correct, red for incorrect).
 
 ### 4. Testing Individual Components
 
@@ -245,21 +233,3 @@ The pipeline tracks the following metrics:
 - AUC-ROC: Area under the receiver operating characteristic curve
 - Confusion matrix: Detailed breakdown of predictions
 
-## Troubleshooting
-
-Common issues and solutions:
-
-1. **Empty Point Clouds**:
-   - Check depth map file paths in config.py
-   - Verify depth map file format and values
-   - Adjust min_depth and max_depth thresholds
-
-2. **Training Issues**:
-   - Reduce batch size if running out of memory
-   - Adjust learning rate if training is unstable
-   - Enable data augmentation for better generalization
-
-3. **Evaluation Problems**:
-   - Ensure model type matches checkpoint
-   - Verify test set paths and labels
-   - Check point cloud preprocessing parameters
