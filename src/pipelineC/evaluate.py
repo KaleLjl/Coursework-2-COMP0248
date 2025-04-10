@@ -1,228 +1,212 @@
-import torch
-import numpy as np
 import os
+import sys
+import argparse
+
+# Add project root directory to Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+import argparse
+import torch
+import torch.nn as nn
+import numpy as np
+import json
 from tqdm import tqdm
-from torch.utils.data import DataLoader
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import confusion_matrix, classification_report
-import open3d as o3d
-from utils import depth_to_pointcloud, collate_fn
+
+from src.pipelineC.model import DGCNN_Seg
+from src.pipelineC.dataloader import get_dataloaders
+from src.pipelineC.utils import compute_metrics
+from src.pipelineC.visualize import plot_metrics_comparison
 
 
-class Evaluator:
-    def __init__(self, model, test_dataset, config):
-        """
-        Args:
-            model: TableSegmentationModel
-            test_dataset: DepthTableDataset for testing
-            config: Evaluation configuration dictionary
-        """
-        self.model = model
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model.to(self.device)
-        self.model.eval()
+def evaluate(model, dataloader, criterion, device, output_dir):
+    """
+    Evaluate the model on the test set.
 
-        self.test_loader = DataLoader(
-            test_dataset,
-            batch_size=config["batch_size"],
-            shuffle=False,
-            num_workers=config["num_workers"],
-            collate_fn=collate_fn
-        )
+    Args:
+        model (nn.Module): Model to evaluate
+        dataloader (DataLoader): Test data loader
+        criterion (nn.Module): Loss function
+        device (torch.device): Device to use
+        output_dir (str): Directory to save outputs
 
-        self.config = config
-        self.class_names = ["Background", "Table"]
+    Returns:
+        tuple: (test_loss, test_metrics)
+    """
+    model.eval()
+    test_loss = 0.0
+    all_preds = []
+    all_targets = []
 
-        if not os.path.exists(config["output_dir"]):
-            os.makedirs(config["output_dir"])
+    # Create output directories
+    os.makedirs(output_dir, exist_ok=True)
 
-        if not os.path.exists(os.path.join(config["output_dir"], "visualizations")):
-            os.makedirs(os.path.join(config["output_dir"], "visualizations"))
+    # Progress bar for evaluation
+    pbar = tqdm(dataloader, desc="Evaluating")
 
-    def evaluate(self):
-        """Run evaluation on test set"""
-        all_preds = []
-        all_labels = []
-        all_filenames = []
+    with torch.no_grad():
+        for batch_idx, data in enumerate(pbar):
+            # Get data
+            inputs = data['point_cloud'].to(device)
+            targets = data['labels'].to(device)
 
-        with torch.no_grad():
-            for batch in tqdm(self.test_loader, desc="Evaluating"):
-                # Move data to device
-                points = batch['points'].to(self.device)
-                labels = batch['labels'].to(self.device)
-                paths = batch['paths']
+            inputs = inputs.transpose(1, 2)  # (B, N, C) -> (B, C, N)
 
-                # Get predictions
-                logits = self.model(points)
-                preds = torch.argmax(logits, dim=2)
+            # Forward pass
+            outputs = model(inputs)
 
-                # Store results
-                all_preds.append(preds.cpu().numpy())
-                all_labels.append(labels.cpu().numpy())
-                all_filenames.extend(paths)
+            # Calculate loss
+            loss = criterion(outputs, targets)
 
-        # Concatenate results
-        all_preds = np.concatenate([p.flatten() for p in all_preds])
-        all_labels = np.concatenate([l.flatten() for l in all_labels])
+            # Update loss
+            test_loss += loss.item()
 
-        # Calculate metrics
-        metrics = self._calculate_metrics(all_preds, all_labels)
+            # Calculate predictions
+            preds = torch.argmax(outputs, dim=1)
 
-        # Generate confusion matrix
-        self._plot_confusion_matrix(all_preds, all_labels)
+            # Update progress bar
+            pbar.set_postfix({
+                'test_loss': f"{loss.item():.4f}",
+                'avg_loss': f"{test_loss / (batch_idx + 1):.4f}"
+            })
 
-        # Print classification report
-        print(classification_report(all_labels, all_preds, target_names=self.class_names))
+            # Store predictions and targets for metrics calculation
+            all_preds.append(preds.cpu().numpy())
+            all_targets.append(targets.cpu().numpy())
 
-        # Save results
-        self._save_results(metrics)
+    # Compute average loss
+    test_loss /= len(dataloader)
 
-        # Visualize some examples
-        self._visualize_examples()
+    # Compute metrics
+    # Concatenate all predictions and targets
+    flat_preds = np.concatenate([p.flatten() for p in all_preds])
+    flat_targets = np.concatenate([t.flatten() for t in all_targets])
 
-        return metrics
+    test_metrics = compute_metrics(flat_targets, flat_preds)
 
-    def _calculate_metrics(self, preds, labels):
-        """Calculate evaluation metrics"""
-        # Calculate accuracy
-        accuracy = (preds == labels).mean()
+    # Log segmentation statistics
+    table_points_gt = np.sum(flat_targets == 1)
+    table_points_pred = np.sum(flat_preds == 1)
+    bg_points_gt = np.sum(flat_targets == 0)
+    bg_points_pred = np.sum(flat_preds == 0)
+    total_points = len(flat_targets)
 
-        # Calculate IoU for each class
-        iou_scores = []
-        for cls in range(2):  # Binary classification
-            intersection = np.logical_and(preds == cls, labels == cls).sum()
-            union = np.logical_or(preds == cls, labels == cls).sum()
-            iou = intersection / (union + 1e-10)
-            iou_scores.append(iou)
+    # Print evaluation summary with standardized format
+    print("\nTest Results:")
+    print(f"  Loss:            {test_loss:.4f}")
+    print(f"  Accuracy:        {test_metrics['accuracy']:.4f}")
+    print(f"  Mean IoU:        {test_metrics['mean_iou']:.4f}")
+    print(f"  Background IoU:  {test_metrics['iou_background']:.4f}")
+    print(f"  Table IoU:       {test_metrics['iou_table']:.4f}")
+    print(f"  F1 Score:        {test_metrics.get('f1_weighted', 0.0):.4f}")
 
-        # Calculate mean IoU
-        mean_iou = np.mean(iou_scores)
+    # Print point distribution statistics
+    print("\nPoint Distribution:")
+    print(f"  Ground Truth: Background: {bg_points_gt} ({bg_points_gt/total_points*100:.2f}%), "
+          f"Table: {table_points_gt} ({table_points_gt/total_points*100:.2f}%)")
+    print(f"  Predictions: Background: {bg_points_pred} ({bg_points_pred/total_points*100:.2f}%), "
+          f"Table: {table_points_pred} ({table_points_pred/total_points*100:.2f}%)")
 
-        # Calculate precision and recall for table class
-        true_positives = np.logical_and(preds == 1, labels == 1).sum()
-        false_positives = np.logical_and(preds == 1, labels == 0).sum()
-        false_negatives = np.logical_and(preds == 0, labels == 1).sum()
+    # Save metrics to file
+    metrics_file = os.path.join(output_dir, 'metrics.json')
+    with open(metrics_file, 'w') as f:
+        json.dump({
+            'loss': test_loss,
+            'accuracy': float(test_metrics['accuracy']),
+            'mean_iou': float(test_metrics['mean_iou']),
+            'iou_table': float(test_metrics['iou_table']),
+            'iou_background': float(test_metrics['iou_background']),
+            'f1_weighted': float(test_metrics.get('f1_weighted', 0.0)),
+            'precision_weighted': float(test_metrics.get('precision_weighted', 0.0)),
+            'recall_weighted': float(test_metrics.get('recall_weighted', 0.0)),
+            'point_distribution': {
+                'ground_truth': {
+                    'background': int(bg_points_gt),
+                    'table': int(table_points_gt),
+                    'background_percent': float(bg_points_gt/total_points*100),
+                    'table_percent': float(table_points_gt/total_points*100)
+                },
+                'predictions': {
+                    'background': int(bg_points_pred),
+                    'table': int(table_points_pred),
+                    'background_percent': float(bg_points_pred/total_points*100),
+                    'table_percent': float(table_points_pred/total_points*100)
+                }
+            }
+        }, f, indent=4)
 
-        precision = true_positives / (true_positives + false_positives + 1e-10)
-        recall = true_positives / (true_positives + false_negatives + 1e-10)
-        f1_score = 2 * precision * recall / (precision + recall + 1e-10)
+    print(f"Metrics saved to {metrics_file}")
 
-        metrics = {
-            'accuracy': accuracy,
-            'mean_iou': mean_iou,
-            'background_iou': iou_scores[0],
-            'table_iou': iou_scores[1],
-            'precision': precision,
-            'recall': recall,
-            'f1_score': f1_score
-        }
+    # Plot metrics
+    metrics_plot_file = os.path.join(output_dir, 'metrics_plot.png')
+    metrics_to_plot = {
+        'Accuracy': test_metrics['accuracy'],
+        'Mean IoU': test_metrics['mean_iou'],
+        'Table IoU': test_metrics['iou_table'],
+        'Background IoU': test_metrics['iou_background'],
+        'F1 Score': test_metrics.get('f1_weighted', 0.0)
+    }
+    plot_metrics_comparison(
+        metrics_dict=metrics_to_plot,
+        title="Segmentation Performance Metrics",
+        save_path=metrics_plot_file
+    )
 
-        return metrics
+    return test_loss, test_metrics
 
-    def _plot_confusion_matrix(self, preds, labels):
-        """Plot and save confusion matrix"""
-        cm = confusion_matrix(labels, preds)
-        plt.figure(figsize=(8, 6))
-        sns.heatmap(
-            cm, 
-            annot=True, 
-            fmt='d', 
-            cmap='Blues',
-            xticklabels=self.class_names,
-            yticklabels=self.class_names
-        )
-        plt.xlabel('Predicted')
-        plt.ylabel('True')
-        plt.title('Confusion Matrix')
 
-        cm_path = os.path.join(self.config["output_dir"], "confusion_matrix.png")
-        plt.savefig(cm_path)
-        plt.close()
+def main(args):
+    """
+    Main function for evaluating Pipeline C.
 
-    def _save_results(self, metrics):
-        """Save evaluation results to file"""
-        results_path = os.path.join(self.config["output_dir"], "evaluation_results.txt")
+    Args:
+        args: Command line arguments
+    """
 
-        with open(results_path, 'w') as f:
-            f.write("Table Segmentation Evaluation Results\n")
-            f.write("===================================\n\n")
+    # Set up output files
+    output_dir = os.path.join("results/pipelineC", 'evaluation')
+    os.makedirs(output_dir, exist_ok=True)
 
-            for metric_name, value in metrics.items():
-                f.write(f"{metric_name}: {value:.4f}\n")
+    # Set device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    def _visualize_examples(self, num_examples=5):
-        """Visualize and save some example predictions"""
-        # Choose random samples
-        indices = np.random.choice(len(self.test_loader.dataset), num_examples, replace=False)
+    # Get dataloaders
+    _, _, test_loader = get_dataloaders(args.test_set)
 
-        for idx in indices:
-            sample = self.test_loader.dataset[idx]
-            points = sample['points'].unsqueeze(0).to(self.device)
-            labels = sample['labels']
-            path = sample['path']
+    # Get model
+    model = DGCNN_Seg()
+    model = model.to(device)
 
-            # Get predictions
-            with torch.no_grad():
-                logits = self.model(points)
-                preds = torch.argmax(logits.squeeze(0), dim=1).cpu()
+    # Load checkpoint
+    checkpoint_dir = "weights/pipelineC"
+    checkpoint_path = os.path.join(checkpoint_dir, 'best_model.pth')
 
-            # Create point cloud visualization
-            pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(points.squeeze(0).cpu().numpy())
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(checkpoint['model_state_dict'])
 
-            # Color based on predictions (red: table, blue: background)
-            colors = np.zeros((len(preds), 3))
-            colors[preds == 0] = [0, 0, 1]  # Background: Blue
-            colors[preds == 1] = [1, 0, 0]  # Table: Red
-            pcd.colors = o3d.utility.Vector3dVector(colors)
+    print(f"Loaded checkpoint from {checkpoint_path}")
 
-            # Save point cloud
-            filename = os.path.basename(path).split('.')[0]
-            output_path = os.path.join(
-                self.config["output_dir"], 
-                "visualizations", 
-                f"{filename}_pred.ply"
-            )
-            o3d.io.write_point_cloud(output_path, pcd)
+    # Get loss weights
+    class_weights = torch.tensor([1, 1000], dtype=torch.float32).to(device)
 
-            # Also save ground truth visualization
-            pcd_gt = o3d.geometry.PointCloud()
-            pcd_gt.points = o3d.utility.Vector3dVector(points.squeeze(0).cpu().numpy())
+    # Define loss function
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
 
-            colors_gt = np.zeros((len(labels), 3))
-            colors_gt[labels == 0] = [0, 0, 1]  # Background: Blue
-            colors_gt[labels == 1] = [1, 0, 0]  # Table: Red
-            pcd_gt.colors = o3d.utility.Vector3dVector(colors_gt)
+    # Evaluate model
+    _, _ = evaluate(
+        model=model,
+        dataloader=test_loader,
+        criterion=criterion,
+        device=device,
+        output_dir=output_dir,
+    )
 
-            output_path_gt = os.path.join(
-                self.config["output_dir"], 
-                "visualizations", 
-                f"{filename}_gt.ply"
-            )
-            o3d.io.write_point_cloud(output_path_gt, pcd_gt)
+    print("Evaluation completed.")
 
-    def inference(self, depth_image, intrinsic_matrix):
-        """Run inference on a single depth image"""
-        # Convert depth to point cloud
-        points = depth_to_pointcloud(depth_image, intrinsic_matrix)
 
-        # Convert to tensor
-        points_tensor = torch.from_numpy(points).float().unsqueeze(0).to(self.device)
-
-        # Get predictions
-        with torch.no_grad():
-            logits = self.model(points_tensor)
-            preds = torch.argmax(logits.squeeze(0), dim=1).cpu().numpy()
-
-        # Create colored point cloud
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points)
-
-        # Color based on predictions (red: table, blue: background)
-        colors = np.zeros((len(preds), 3))
-        colors[preds == 0] = [0, 0, 1]  # Background: Blue
-        colors[preds == 1] = [1, 0, 0]  # Table: Red
-        pcd.colors = o3d.utility.Vector3dVector(colors)
-
-        return pcd, preds
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='Evaluate Pipeline C: Point Cloud Segmentation')
+    parser.add_argument('--test_set', type=int, default=1,
+                        help='Test set to use (1: Harvard, 2: RealSense)')
+    args = parser.parse_args()
+    main(args)

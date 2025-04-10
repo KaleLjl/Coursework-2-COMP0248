@@ -1,306 +1,381 @@
-from pathlib import Path
+import pickle
 import numpy as np
 import torch
 import open3d as o3d
 import cv2
 import os
-from tqdm import tqdm
-import glob
-import json
+from sklearn.metrics import accuracy_score, precision_score, recall_score, \
+    f1_score, confusion_matrix
 
-
-SEED = 42
-ROOT_DIR = Path(__file__).parents[2]
-DATA_DIR = ROOT_DIR / "data"
-WEIGHTS_DIR = ROOT_DIR / "weights"
-RESULTS_DIR = ROOT_DIR / "results"
-MIT_SEQUENCES = {
-    "mit_32_d507": ["d507_2"],
-    "mit_76_459": ["76-459b"],
-    "mit_76_studyroom": ["76-1studyroom2"],
-    "mit_gym_z_squash": ["gym_z_squash_scan1_oct_26_2012_erika"],
-    "mit_lab_hj": ["lab_hj_tea_nov_2_2012_scan1_erika"]
+DATA_CONFIG = {
+    "data_root": "data/CW2-Dataset/data",
+    "num_points": 5120,
+    "batch_size": 8,
+    "num_workers": 8
 }
-HARVARD_SEQUENCES = {
-    "harvard_c5": ["hv_c5_1"],
-    "harvard_c6": ["hv_c6_1"],
-    "harvard_c11": ["hv_c11_2"],
-    "harvard_tea_2": ["hv_tea2_2"]
+TRAINGING_CONFIG = {
+    "learning_rate": 0.001,
+    "num_epochs": 200,
+    "weight_decay": 1e-5,
+    "lr_decay": 0.7,
+    "lr_decay_step": 40,
+    "early_stop": 20
 }
-REAL_SENSE_SEQUENCES = {
-    "real_sense_1": ["real_sense_1"],
-    "real_sense_2": ["real_sense_2"]
-}
+MIT_SEQUENCES = ["mit_32_d507", "mit_76_459", "mit_76_studyroom",
+                 "mit_gym_z_squash", "mit_lab_hj"]
+HARVARD_SEQUENCES = ["harvard_c5", "harvard_c6", "harvard_c11", "harvard_tea_2"]
 
 
-def depth_to_pointcloud(depth_image, intrinsic_matrix):
-    """Convert depth image to point cloud using camera intrinsics
+def get_mask(polygons, image_shape):
+    """
+    Generate image-level label based on polygon annotations.
 
     Args:
-        depth_image: Numpy array of depth values
-        intrinsic_matrix: 3x3 camera intrinsic matrix
+        polygons (list): List of dictionaries containing polygon annotations
+        image_shape (tuple): Shape of the image (height, width)
 
     Returns:
-        points: Nx3 numpy array of 3D points
+        mask: a mask with 1s inside the table polygons
     """
-    # Get image dimensions
-    height, width = depth_image.shape
+    # Create empty mask
+    binary_label = 0
+    mask = np.zeros(image_shape, dtype=np.uint8)
 
-    # Create pixel coordinate grid
-    u, v = np.meshgrid(np.arange(width), np.arange(height))
-    u, v = u.flatten(), v.flatten()
+    # If no polygons, return 0 label and empty mask
+    if not polygons:
+        return binary_label, mask
 
-    # Filter out invalid depth values
-    valid_depth = depth_image.flatten() > 0
-    z = depth_image.flatten()[valid_depth]
-    u_valid = u[valid_depth]
-    v_valid = v[valid_depth]
+    # Draw all polygons on the mask
+    for polygon in polygons:
+        points = polygon["points"]
+        if len(points) < 3:  # Need at least 3 points to form a polygon
+            continue
 
-    # Calculate 3D coordinates
-    fx, fy = intrinsic_matrix[0, 0], intrinsic_matrix[1, 1]
-    cx, cy = intrinsic_matrix[0, 2], intrinsic_matrix[1, 2]
+        points_array = np.array(points, dtype=np.int32)
 
-    x = (u_valid - cx) * z / fx
-    y = (v_valid - cy) * z / fy
+        # Check if points array is valid (not containing NaNs or out-of-bounds values)
+        if np.any(np.isnan(points_array)) or np.any(points_array < 0) or \
+           np.any(points_array[:, 0] >= image_shape[1]) or np.any(points_array[:, 1] >= image_shape[0]):
+            # Skip invalid polygons
+            continue
 
-    # Combine into point cloud
-    points = np.stack([x, y, z], axis=1)
+        cv2.fillPoly(mask, [points_array], 1)
+        binary_label = 1  # Set label to 1 if any polygon is drawn
 
-    return points
+    return binary_label, mask
 
 
-def collate_fn(batch):
-    """Custom collate function to handle variable point cloud sizes"""
-    points = [item['points'] for item in batch]
-    labels = [item['labels'] for item in batch]
-    paths = [item['path'] for item in batch]
+def get_intrinsics(intrinsics_file):
+    """
+    Get camera intrinsics from a file.
 
-    # Pad point clouds to same size or use a different approach
-    max_points = max(p.shape[0] for p in points)
-    points_padded = []
-    labels_padded = []
+    Args:
+        intrinsics_file (str): Path to the intrinsics file
 
-    for p, l in zip(points, labels):
-        if p.shape[0] < max_points:
-            padded_points = torch.zeros((max_points, 3), dtype=torch.float32)
-            padded_labels = torch.zeros(max_points, dtype=torch.long)
-            padded_points[:p.shape[0], :] = p
-            padded_labels[:l.shape[0]] = l
-            points_padded.append(padded_points)
-            labels_padded.append(padded_labels)
-        else:
-            points_padded.append(p)
-            labels_padded.append(l)
+    Returns:
+        dict: Camera intrinsics including fx, fy, cx, cy
+    """
+    # Check if the file exists
+    if not os.path.exists(intrinsics_file):
+        raise FileNotFoundError(f"Intrinsics file not found: {intrinsics_file}")
 
-    return {
-        'points': torch.stack(points_padded),
-        'labels': torch.stack(labels_padded),
-        'paths': paths
+    # Default values in case we can't parse the file
+    default_intrinsics = {
+        'fx': 525.0,
+        'fy': 525.0,
+        'cx': 319.5,
+        'cy': 239.5
     }
 
+    try:
+        with open(intrinsics_file, 'r') as f:
+            lines = f.readlines()
 
-def create_dataset_from_rgbd(
-    rgb_dir,
-    depth_dir,
-    output_dir,
-    intrinsic_matrix,
-    annotation_file=None,
-    table_height_threshold=None
-):
+        if len(lines) >= 3:
+            # Parse first row for fx and cx
+            row1 = lines[0].strip().split()
+            if len(row1) >= 3:
+                fx = float(row1[0])
+                cx = float(row1[2])
+            else:
+                print(f"Warning: Could not parse fx and cx from {intrinsics_file}. Using default values.")
+                fx, cx = default_intrinsics['fx'], default_intrinsics['cx']
+
+            # Parse second row for fy and cy
+            row2 = lines[1].strip().split()
+            if len(row2) >= 3:
+                fy = float(row2[1])
+                cy = float(row2[2])
+            else:
+                print(f"Warning: Could not parse fy and cy from {intrinsics_file}. Using default values.")
+                fy, cy = default_intrinsics['fy'], default_intrinsics['cy']
+
+            return {
+                'fx': fx,
+                'fy': fy,
+                'cx': cx,
+                'cy': cy
+            }
+        else:
+            print(f"Warning: Intrinsics file {intrinsics_file} does not have enough lines. Using default values.")
+            return default_intrinsics
+
+    except Exception as e:
+        print(f"Error reading intrinsics from {intrinsics_file}: {e}. Using default values.")
+        return default_intrinsics
+
+
+def get_polygon(labels_file):
     """
-    Create a point cloud dataset with table segmentation from RGB-D data
+    Read and parse polygon annotations from a file.
 
     Args:
-        rgb_dir: Directory with RGB images
-        depth_dir: Directory with depth images
-        output_dir: Output directory for segmented point clouds
-        intrinsic_matrix: Camera intrinsic matrix
-        annotation_file: Optional JSON file with table annotations
-        table_height_threshold: Optional height threshold for table segmentation
+        labels_file (str): Path to the labels file
+
+    Returns:
+        dict: Dictionary mapping image timestamps to polygon annotations
     """
-    # Create output directories
-    os.makedirs(os.path.join(output_dir, "depth"), exist_ok=True)
-    os.makedirs(os.path.join(output_dir, "labels"), exist_ok=True)
-    os.makedirs(os.path.join(output_dir, "point_clouds"), exist_ok=True)
+    # Check if the file exists
+    if not os.path.exists(labels_file):
+        print(f"Labels file not found: {labels_file}")
+        return {}
 
-    # Get file lists
-    rgb_files = sorted(glob.glob(os.path.join(rgb_dir, "*.png")))
-    depth_files = sorted(glob.glob(os.path.join(depth_dir, "*.png")))
-
-    assert len(rgb_files) == len(depth_files), "RGB and depth file counts don't match"
-
-    # Load annotations if provided
     annotations = {}
-    if annotation_file:
-        with open(annotation_file, 'r') as f:
-            annotations = json.load(f)
 
-    # Process each pair of images
-    for i, (rgb_path, depth_path) in enumerate(tqdm(zip(rgb_files, depth_files), total=len(rgb_files))):
-        # Get filenames
-        filename = os.path.basename(rgb_path).split('.')[0]
+    try:
+        # Get the directory where labels_file is located
+        labels_dir = os.path.dirname(labels_file)
+        possible_depth_dirs = ['depthTSDF', 'depth']
 
-        # Load images
-        rgb = cv2.imread(rgb_path)
-        depth = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED) / 1000.0  # Convert mm to meters
+        # Load the table polygon labels
+        with open(labels_file, 'rb') as label_file:
+            tabletop_labels = pickle.load(label_file)
 
-        # Convert depth to point cloud
-        points = depth_to_pointcloud(depth, intrinsic_matrix)
+        # Get list of image files in the same order as the labels
+        for possible_dir in possible_depth_dirs:
+            depth_dir = os.path.join(os.path.dirname(labels_dir), possible_dir)
+            if os.path.exists(depth_dir):
+                depth_list = sorted(os.listdir(depth_dir))
 
-        # Create segmentation mask
-        height, width = depth.shape
-        mask = np.zeros((height, width), dtype=np.uint8)
+                # Map each image to its corresponding polygon labels
+                for i, (polygon_list, depth_name) in enumerate(zip(tabletop_labels, depth_list)):
+                    # Extract timestamp from image filename
+                    timestamp = depth_name[:-4]  # Remove the extension (.png)
 
-        # Method 1: Use annotations if available
-        if filename in annotations:
-            # Draw table mask from polygons
-            table_polygons = annotations[filename]["table"]
-            for polygon in table_polygons:
-                points_array = np.array(polygon, dtype=np.int32)
-                cv2.fillPoly(mask, [points_array], 1)
+                    # Convert polygon format to our internal format
+                    # In pickle file, polygons are stored as [frame][table_instance][coordinate]
+                    # where coordinate is [x_coords, y_coords]
+                    formatted_polygons = []
 
-        # Method 2: Use height threshold if provided
-        elif table_height_threshold is not None:
-            # Reshape points to image grid
-            point_image = np.zeros((height, width, 3))
-            valid_mask = depth > 0
+                    for polygon in polygon_list:
+                        # Create a list of (x,y) tuples from the polygon coordinates
+                        points = []
+                        for x, y in zip(polygon[0], polygon[1]):
+                            points.append((float(x), float(y)))
 
-            # Fill in valid points
-            points_counter = 0
-            for h in range(height):
-                for w in range(width):
-                    if valid_mask[h, w]:
-                        point_image[h, w] = points[points_counter]
-                        points_counter += 1
+                        if points:  # Only add if there are points
+                            formatted_polygons.append({
+                                "label": "table",
+                                "points": points
+                            })
 
-            # Create mask based on height (Y-coordinate in camera space)
-            table_mask = (point_image[:, :, 1] > table_height_threshold) & valid_mask
-            mask[table_mask] = 1
+                    annotations[timestamp] = formatted_polygons
 
-        # Save outputs
-        cv2.imwrite(os.path.join(output_dir, "depth", f"{filename}.png"), (depth * 1000).astype(np.uint16))
-        cv2.imwrite(os.path.join(output_dir, "labels", f"{filename}.png"), mask)
+        return annotations
 
-        # Create colored point cloud for visualization
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points)
-
-        # Color based on segmentation (flatten mask to match points)
-        colors = np.zeros((len(points), 3))
-        flat_mask = mask.flatten()[depth.flatten() > 0]
-        colors[flat_mask == 1] = [1, 0, 0]  # Table: Red
-        colors[flat_mask == 0] = [0, 0, 1]  # Background: Blue
-        pcd.colors = o3d.utility.Vector3dVector(colors)
-
-        # Save point cloud
-        o3d.io.write_point_cloud(
-            os.path.join(output_dir, "point_clouds", f"{filename}.ply"), 
-            pcd
-        )
-
-    print(f"Created dataset with {len(rgb_files)} samples in {output_dir}")
+    except Exception as e:
+        print(f"Error reading pickle annotations from {labels_file}: {e}")
 
 
-def augment_point_cloud(points, rotation_range=[-0.1, 0.1], translation_range=[-0.1, 0.1], noise_std=0.01):
+def depth_to_pointcloud(depth_map, intrinsics, subsample=True,
+                        num_points=1024, min_depth=0.5, max_depth=10.0):
     """
-    Augment point cloud with random transformations
+    Convert depth map to point cloud using camera intrinsics with Open3D.
 
     Args:
-        points: Nx3 array of points
-        rotation_range: Range of rotation angles in radians
-        translation_range: Range of translations
-        noise_std: Standard deviation of Gaussian noise
+        depth_map (numpy.ndarray): Input depth map in meters
+        intrinsics (dict): Camera intrinsics including fx, fy, cx, cy
+        subsample (bool): Whether to subsample the point cloud
+        num_points (int): Number of points to sample if subsample is True
+        min_depth (float): Minimum valid depth value in meters
+        max_depth (float): Maximum valid depth value in meters
 
     Returns:
-        augmented_points: Nx3 array of augmented points
+        numpy.ndarray: Point cloud of shape (N, 3) where N is num_points if
+        subsample is True or the number of valid depth pixels otherwise
     """
-    # Random rotation around z-axis (vertical)
-    angle = np.random.uniform(rotation_range[0], rotation_range[1])
-    rot_z = np.array([
-        [np.cos(angle), -np.sin(angle), 0],
-        [np.sin(angle), np.cos(angle), 0],
-        [0, 0, 1]
-    ])
+    # Check if depth map is valid
+    if depth_map is None or depth_map.size == 0:
+        print("Warning: Empty depth map received, returning zero point cloud")
+        return np.zeros((num_points, 3))
 
-    # Random translation
-    tx = np.random.uniform(translation_range[0], translation_range[1])
-    ty = np.random.uniform(translation_range[0], translation_range[1])
-    tz = np.random.uniform(translation_range[0], translation_range[1])
-    translation = np.array([tx, ty, tz])
+    # Create Open3D intrinsic object
+    height, width = depth_map.shape
 
-    # Apply rotation
-    rotated_points = np.dot(points, rot_z.T)
+    # Ensure intrinsics are available
+    required_keys = ['fx', 'fy', 'cx', 'cy']
+    if not all(key in intrinsics for key in required_keys):
+        print(f"Warning: Missing intrinsics keys: {[key for key in required_keys if key not in intrinsics]}")
+        # Use default values for missing keys
+        default_values = {'fx': 525.0, 'fy': 525.0, 'cx': 319.5, 'cy': 239.5}
+        for key in required_keys:
+            if key not in intrinsics:
+                intrinsics[key] = default_values[key]
 
-    # Apply translation
-    translated_points = rotated_points + translation
+    # Create Open3D camera intrinsics
+    o3d_intrinsics = o3d.camera.PinholeCameraIntrinsic(
+        width, height, 
+        intrinsics['fx'], intrinsics['fy'], 
+        intrinsics['cx'], intrinsics['cy']
+    )
 
-    # Add noise
-    if noise_std > 0:
-        noise = np.random.normal(0, noise_std, size=translated_points.shape)
-        noisy_points = translated_points + noise
-    else:
-        noisy_points = translated_points
+    # Create depth image from numpy array
+    # Open3D expects depth in meters, so we don't need to convert if already in meters
+    depth_image = o3d.geometry.Image(depth_map.astype(np.float32))
 
-    return noisy_points
+    # Create point cloud from depth image
+    pcd = o3d.geometry.PointCloud.create_from_depth_image(
+        depth_image,
+        o3d_intrinsics,
+        depth_scale=1.0,  # depth is already in meters
+        depth_trunc=max_depth,
+        stride=1
+    )
+
+    # Get points as numpy array
+    points = np.asarray(pcd.points)
+
+    # Filter points based on min depth
+    if points.shape[0] > 0:
+        # Calculate depth of each point (z coordinate)
+        depths = points[:, 2]
+        valid_mask = depths >= min_depth
+        points = points[valid_mask]
+
+    # Check if we have any valid points
+    if points.shape[0] == 0:
+        print("Warning: No valid points after filtering, returning zero point cloud")
+        return np.zeros((num_points, 3))
+
+    # Subsample the point cloud if needed
+    if subsample:
+        if points.shape[0] > num_points:
+            # Randomly sample points
+            indices = np.random.choice(points.shape[0], num_points, replace=False)
+            points = points[indices]
+        elif points.shape[0] < num_points:
+            # Pad with duplicated points or zeros if not enough points
+            if points.shape[0] > 0:
+                # Duplicate some points
+                padding_indices = np.random.choice(points.shape[0], num_points - points.shape[0], replace=True)
+                padding = points[padding_indices]
+            else:
+                # Use zeros if no valid points
+                padding = np.zeros((num_points - points.shape[0], 3))
+            points = np.vstack((points, padding))
+
+    return points.astype(np.float32)
 
 
-def preprocess_point_cloud(points, num_points=4096, normalize=True):
+def compute_metrics(y_true, y_pred, num_classes=2):
     """
-    Preprocess point cloud for model input
+    Compute metrics for the pipline C.
 
     Args:
-        points: Nx3 array of points
-        num_points: Number of points to sample
-        normalize: Whether to normalize the point cloud
+        y_true (numpy.ndarray): Ground truth labels
+        y_pred (numpy.ndarray): Predicted labels
+        num_classes (int): Number of classes
 
     Returns:
-        processed_points: num_points x 3 array of processed points
+        dict: Dictionary containing segmentation metrics
     """
-    # Sample points if needed
-    if len(points) > num_points:
-        indices = np.random.choice(len(points), num_points, replace=False)
-        sampled_points = points[indices]
-    elif len(points) < num_points:
-        # Repeat points if we have too few
-        indices = np.random.choice(len(points), num_points, replace=True)
-        sampled_points = points[indices]
+    # Ensure inputs are numpy arrays
+    if isinstance(y_true, torch.Tensor):
+        y_true = y_true.cpu().numpy()
+    if isinstance(y_pred, torch.Tensor):
+        y_pred = y_pred.cpu().numpy()
+
+    # Flatten the arrays
+    y_true = y_true.flatten()
+    y_pred = y_pred.flatten()
+
+    # Check if we have data for both classes
+    unique_true = np.unique(y_true)
+    unique_pred = np.unique(y_pred)
+    unique_labels = np.unique(np.concatenate([unique_true, unique_pred]))
+
+    # Compute per-class metrics
+    accuracy = accuracy_score(y_true, y_pred)
+
+    # Compute precision, recall, and F1 with different averaging methods
+    precision_macro = precision_score(y_true, y_pred, average='macro', zero_division=0)
+    recall_macro = recall_score(y_true, y_pred, average='macro', zero_division=0)
+    f1_macro = f1_score(y_true, y_pred, average='macro', zero_division=0)
+
+    precision_weighted = precision_score(y_true, y_pred, average='weighted', zero_division=0)
+    recall_weighted = recall_score(y_true, y_pred, average='weighted', zero_division=0)
+    f1_weighted = f1_score(y_true, y_pred, average='weighted', zero_division=0)
+
+    # Compute per-class metrics (for binary segmentation)
+    if num_classes == 2:
+        # Get per-class scores (safely handling cases where only one class is present)
+        per_class_precision = precision_score(y_true, y_pred, average=None, zero_division=0)
+        per_class_recall = recall_score(y_true, y_pred, average=None, zero_division=0)
+        per_class_f1 = f1_score(y_true, y_pred, average=None, zero_division=0)
+
+        # Initialize with default values
+        precision_table = 0.0
+        recall_table = 0.0
+        f1_table = 0.0
+
+        # Check if class 1 (table) is present in the scores
+        if 1 in unique_labels and len(per_class_precision) > 1:
+            precision_table = per_class_precision[1]
+            recall_table = per_class_recall[1]
+            f1_table = per_class_f1[1]
     else:
-        sampled_points = points
+        precision_table = np.nan
+        recall_table = np.nan
+        f1_table = np.nan
 
-    # Normalize point cloud
-    if normalize:
-        center = np.mean(sampled_points, axis=0)
-        sampled_points = sampled_points - center
+    # Compute IoU for each class
+    # Always create confusion matrix with all classes (0 to num_classes-1)
+    # This ensures we have the expected dimensions even when only one class is present
+    conf_matrix = confusion_matrix(
+        y_true,
+        y_pred,
+        labels=list(range(num_classes))
+    )
 
-        # Scale to unit sphere
-        max_dist = np.max(np.sqrt(np.sum(sampled_points**2, axis=1)))
-        sampled_points = sampled_points / max_dist
+    # Class names for better readability
+    class_names = ["background", "table"] if num_classes == 2 else [f"class_{i}" for i in range(num_classes)]
 
-    return sampled_points
+    iou_list = []
+    for cls in range(num_classes):
+        intersection = conf_matrix[cls, cls]
+        union = np.sum(conf_matrix[cls, :]) + np.sum(conf_matrix[:, cls]) - intersection
+        iou = intersection / union if union > 0 else 0.0
+        iou_list.append(iou)
 
+    mean_iou = np.mean(iou_list)
 
-def visualize_segmentation(points, labels, output_path=None):
-    """
-    Visualize point cloud segmentation
+    # Create metrics dictionary with standardized naming
+    metrics = {
+        'accuracy': accuracy,
+        'precision_macro': precision_macro,
+        'recall_macro': recall_macro,
+        'f1_macro': f1_macro,
+        'precision_weighted': precision_weighted,
+        'recall_weighted': recall_weighted,
+        'f1_weighted': f1_weighted,
+        'precision_table': precision_table,
+        'recall_table': recall_table,
+        'f1_table': f1_table,
+        'mean_iou': mean_iou,
+    }
 
-    Args:
-        points: Nx3 array of points
-        labels: N array of labels (0: background, 1: table)
-        output_path: Optional path to save visualization
-    """
-    # Create point cloud
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(points)
+    # Add class-specific IoU values with descriptive names
+    for cls in range(num_classes):
+        metrics[f'iou_{class_names[cls]}'] = iou_list[cls]
 
-    # Color based on labels
-    colors = np.zeros((len(points), 3))
-    colors[labels == 0] = [0, 0, 1]  # Background: Blue
-    colors[labels == 1] = [1, 0, 0]  # Table: Red
-    pcd.colors = o3d.utility.Vector3dVector(colors)
-
-    # Save point cloud if output path is provided
-    if output_path:
-        o3d.io.write_point_cloud(output_path, pcd)
-
-    # Visualize
-    o3d.visualization.draw_geometries([pcd])
+    return metrics
