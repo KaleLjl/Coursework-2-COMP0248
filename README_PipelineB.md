@@ -20,11 +20,20 @@ Pipeline B performs the **binary classification** (table/no-table) task using **
 - pickle
 - csv
 
+## Requirements
+- Clone the MiDaS repository as shown in Pipeline Structure.
+  ```bash
+    cd ./src/pipelineB/
+  ```
+  ```bash
+    git clone https://github.com/isl-org/MiDaS.git
+  ```
+
 ## Pipeline Structure
 
 ```
 src/pipelineB/
-├── MiDaS/                                # Clone the MiDaS repository here if having trouble running locally.
+├── MiDaS/                                # Clone the MiDaS repository here
 │   └── ...         
 ├── dataloader.py                         # Dataset class for loading .npy depth + labels 
 ├── evaluate_uclDataset.py                # Evaluates best model on custom UCL dataset
