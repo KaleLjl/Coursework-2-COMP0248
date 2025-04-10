@@ -1,0 +1,20 @@
+===== Evaluation Results on UCL Dataset =====
+Loss:      0.5170
+Accuracy:  0.6786
+F1 Score:  0.7907
+Precision: 0.6538
+Recall:    1.0000
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0     1.0000    0.1818    0.3077        11
+           1     0.6538    1.0000    0.7907        17
+
+    accuracy                         0.6786        28
+   macro avg     0.8269    0.5909    0.5492        28
+weighted avg     0.7898    0.6786    0.6009        28
+
+Confusion Matrix:
+[[ 2  9]
+ [ 0 17]]
